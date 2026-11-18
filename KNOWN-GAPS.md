@@ -47,7 +47,9 @@ unaffected; the corpus is pure ASCII.
 
 ## Error text
 
-Runtime failures use upstream's `[ERROR] ...` line and exit 1. Option errors
+Runtime failures use upstream's `[ERROR] ...` line and exit 1, including a
+`--indent_width` that parses as an integer but is not positive (upstream
+rejects that in `format()`, not in argparse, and so do we). Option errors
 use argparse-shaped text (`usage: sqlformat-rs [OPTIONS] FILE [FILE ...]` plus
 `sqlformat-rs: error: argument -k/--keywords: invalid choice: ...`) and exit 2,
 like upstream; the wording after `error:` is ours, not byte-identical.

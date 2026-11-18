@@ -92,6 +92,7 @@ fn run() -> Result<(), u8> {
     let mut files: Vec<String> = Vec::new();
     let mut outfile: Option<String> = None;
     let mut in_place = false;
+    let mut indent_width: Option<i64> = None;
 
     let mut index = 0;
     while index < args.len() {
@@ -126,9 +127,9 @@ fn run() -> Result<(), u8> {
                         options.identifier_case = Some(case_value("-i", value)?)
                     }
                     "-o" | "--outfile" => outfile = Some(value.clone()),
-                    _ => match value.parse::<usize>() {
-                        Ok(width) if width >= 1 => options.indent_width = width,
-                        _ => {
+                    _ => match value.parse::<i64>() {
+                        Ok(width) => indent_width = Some(width),
+                        Err(_) => {
                             return Err(usage_error(&format!(
                                 "argument --indent_width: invalid int value: '{value}'"
                             )))
@@ -138,9 +139,9 @@ fn run() -> Result<(), u8> {
             }
             _ if arg.starts_with("--indent_width=") => {
                 let value = &arg["--indent_width=".len()..];
-                match value.parse::<usize>() {
-                    Ok(width) if width >= 1 => options.indent_width = width,
-                    _ => {
+                match value.parse::<i64>() {
+                    Ok(width) => indent_width = Some(width),
+                    Err(_) => {
                         return Err(usage_error(&format!(
                             "argument --indent_width: invalid int value: '{value}'"
                         )))
@@ -160,6 +161,17 @@ fn run() -> Result<(), u8> {
         return Err(usage_error(
             "the following arguments are required: filename",
         ));
+    }
+
+    // `format()` validates the value, not argparse: a non-positive width is a
+    // runtime error (exit 1), not a usage error (exit 2).
+    if let Some(width) = indent_width {
+        if width <= 0 {
+            return Err(error(
+                "Invalid options: indent_width requires a positive integer",
+            ));
+        }
+        options.indent_width = width as usize;
     }
     if files.len() > 1 {
         if outfile.is_some() {

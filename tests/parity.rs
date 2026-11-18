@@ -118,6 +118,24 @@ fn invalid_option_values_exit_two() {
 }
 
 #[test]
+fn non_positive_indent_width_exits_one() {
+    // A valid integer that format() rejects is a runtime error, not a usage one.
+    for width in ["0", "-1", "-5"] {
+        let out = Command::new(binary())
+            .args(["--indent_width", width])
+            .arg(fixtures().join("kwcase.sql"))
+            .output()
+            .expect("run");
+        assert_eq!(out.status.code(), Some(1), "width {width} exit code");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.starts_with("[ERROR] Invalid options: indent_width requires a positive integer"),
+            "width {width} stderr: {stderr}"
+        );
+    }
+}
+
+#[test]
 fn missing_option_value_exits_two() {
     let out = Command::new(binary()).args(["-k"]).output().expect("run");
     assert_eq!(out.status.code(), Some(2));
