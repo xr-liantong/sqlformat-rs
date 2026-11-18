@@ -54,7 +54,7 @@ when the `fixtures/` files are present.
 Command: `sqlformat -r corpus-20k.sql` (ours `-r`), output 3,578,891 B,
 sha256 `c481988a319df7a5b6ce332c…` for both.
 
-Box: Ubuntu 24.04, 4 vCPU, CPython 3.12 + sqlparse 0.6.1. Three interleaved
+Box: Ubuntu 24.04, 2 vCPU (`nproc` = 2), CPython 3.12 + sqlparse 0.6.1. Three interleaved
 runs each, wall clock and peak RSS (`baseline/run.py`, `ru_maxrss`):
 
 | tool | wall (3 runs) | median | peak RSS |

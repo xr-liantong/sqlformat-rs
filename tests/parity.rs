@@ -96,6 +96,42 @@ fn unsupported_flag_exits_two() {
 }
 
 #[test]
+fn invalid_option_values_exit_two() {
+    // argparse refuses bad choices and bad ints with exit 2 and a usage line.
+    for args in [
+        vec!["-k", "bogus"],
+        vec!["-i", "bogus"],
+        vec!["--indent_width", "abc"],
+    ] {
+        let out = Command::new(binary())
+            .args(&args)
+            .arg(fixtures().join("kwcase.sql"))
+            .output()
+            .expect("run");
+        assert_eq!(out.status.code(), Some(2), "{args:?} exit code");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.starts_with("usage: sqlformat-rs"),
+            "{args:?} stderr: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn missing_option_value_exits_two() {
+    let out = Command::new(binary()).args(["-k"]).output().expect("run");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("expected one argument"));
+}
+
+#[test]
+fn missing_filename_exits_two() {
+    let out = Command::new(binary()).output().expect("run");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("the following arguments are required"));
+}
+
+#[test]
 fn corpus_matches_upstream_checksum() {
     let corpus = fixtures().join("corpus-20k.sql");
     let data = std::fs::read(&corpus)

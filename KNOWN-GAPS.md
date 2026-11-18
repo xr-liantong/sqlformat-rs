@@ -5,17 +5,26 @@ Scope of v0.1 and every place this port knowingly differs from `sqlparse`
 
 ## Not implemented (exit status 2)
 
-Upstream accepts these flags; this port prints `not implemented: <flag>` on
-stderr and exits 2 (a wrong guess is worse than a refusal):
+This port prints `not implemented: <flag>` on stderr and exits 2 (a wrong guess
+is worse than a refusal). The list mixes two kinds of upstream surface:
+
+CLI flags the upstream `sqlformat` binary really accepts:
 
 - `-a`, `--reindent_aligned` — needs `AlignedIndentFilter`
 - `-s`, `--use_space_around_operators`
 - `-l`, `--language`
 - `--strip-comments`
-- `--indent_after_first`, `--indent_columns`, `--indent_tabs`
+- `--indent_after_first`, `--indent_columns`
 - `--wrap_after`, `--comma_first`, `--compact`
 - `--encoding`
-- `--right_margin`, `--truncate_strings`, `--truncate_char`, `--output_format`
+
+Keyword arguments of `sqlparse.format()` that the upstream CLI never accepted
+(`--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
+`--output_format` are rejected there as `unrecognized arguments`, exit 2; we
+also exit 2, with a different message):
+
+- `--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
+  `--output_format`
 
 The `ReindentFilter` already carries `wrap_after`, `comma_first`,
 `indent_columns` and `compact` internally, so wiring those three is mostly a
@@ -38,9 +47,10 @@ unaffected; the corpus is pure ASCII.
 
 ## Error text
 
-`[ERROR] ...` messages and exit codes match, but Python tracebacks for
-malformed options are replaced by argparse-style usage text. `--bogus` output
-is not byte-identical.
+Runtime failures use upstream's `[ERROR] ...` line and exit 1. Option errors
+use argparse-shaped text (`usage: sqlformat-rs [OPTIONS] FILE [FILE ...]` plus
+`sqlformat-rs: error: argument -k/--keywords: invalid choice: ...`) and exit 2,
+like upstream; the wording after `error:` is ours, not byte-identical.
 
 ## CI
 

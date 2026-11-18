@@ -62,10 +62,27 @@ fn error(message: &str) -> u8 {
     1
 }
 
+/// argparse-style refusal: usage line plus `error:` line, exit code 2.
+fn usage_error(message: &str) -> u8 {
+    eprintln!("usage: sqlformat-rs [OPTIONS] FILE [FILE ...]");
+    eprintln!("sqlformat-rs: error: {message}");
+    2
+}
+
+fn case_flag(flag: &str) -> &'static str {
+    match flag {
+        "-k" | "--keywords" => "-k/--keywords",
+        _ => "-i/--identifiers",
+    }
+}
+
 fn case_value(flag: &str, value: &str) -> Result<String, u8> {
     match value {
         "upper" | "lower" | "capitalize" => Ok(value.to_string()),
-        other => Err(error(&format!("Invalid value for {flag}: '{other}'"))),
+        other => Err(usage_error(&format!(
+            "argument {}: invalid choice: '{other}' (choose from 'upper', 'lower', 'capitalize')",
+            case_flag(flag)
+        ))),
     }
 }
 
@@ -97,20 +114,25 @@ fn run() -> Result<(), u8> {
             "-k" | "--keywords" | "-i" | "--identifiers" | "-o" | "--outfile"
             | "--indent_width" => {
                 index += 1;
-                let value = args
-                    .get(index)
-                    .ok_or_else(|| error(&format!("argument {arg}: expected one argument")))?;
+                let value = args.get(index).ok_or_else(|| {
+                    usage_error(&format!(
+                        "argument {}: expected one argument",
+                        case_flag(&arg)
+                    ))
+                })?;
                 match arg.as_str() {
-                    "-k" | "--keywords" => {
-                        options.keyword_case = Some(case_value("keyword_case", value)?)
-                    }
+                    "-k" | "--keywords" => options.keyword_case = Some(case_value("-k", value)?),
                     "-i" | "--identifiers" => {
-                        options.identifier_case = Some(case_value("identifier_case", value)?)
+                        options.identifier_case = Some(case_value("-i", value)?)
                     }
                     "-o" | "--outfile" => outfile = Some(value.clone()),
                     _ => match value.parse::<usize>() {
                         Ok(width) if width >= 1 => options.indent_width = width,
-                        _ => return Err(error("indent_width requires a positive integer")),
+                        _ => {
+                            return Err(usage_error(&format!(
+                                "argument --indent_width: invalid int value: '{value}'"
+                            )))
+                        }
                     },
                 }
             }
@@ -118,7 +140,11 @@ fn run() -> Result<(), u8> {
                 let value = &arg["--indent_width=".len()..];
                 match value.parse::<usize>() {
                     Ok(width) if width >= 1 => options.indent_width = width,
-                    _ => return Err(error("indent_width requires a positive integer")),
+                    _ => {
+                        return Err(usage_error(&format!(
+                            "argument --indent_width: invalid int value: '{value}'"
+                        )))
+                    }
                 }
             }
             _ if arg.starts_with('-') && arg != "-" => {
@@ -131,8 +157,9 @@ fn run() -> Result<(), u8> {
     }
 
     if files.is_empty() {
-        eprintln!("[ERROR] the following arguments are required: filename");
-        return Err(2);
+        return Err(usage_error(
+            "the following arguments are required: filename",
+        ));
     }
     if files.len() > 1 {
         if outfile.is_some() {
