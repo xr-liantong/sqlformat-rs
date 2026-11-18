@@ -1,0 +1,19 @@
+[package]
+name = "sqlformat-rs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.75"
+description = "Rust port of sqlparse's sqlformat CLI (-r, -k, --indent_width)"
+license = "BSD-3-Clause"
+repository = "https://github.com/xr-liantong/sqlformat-rs"
+
+[[bin]]
+name = "sqlformat-rs"
+path = "src/bin/main.rs"
+
+[dependencies]
+fancy-regex = "0.14"
+regex = "1"
+
+[profile.release]
+opt-level = 2

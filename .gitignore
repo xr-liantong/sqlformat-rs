@@ -1,0 +1,9 @@
+/target
+/out.sql
+/.venv
+baseline/corpus.sql
+baseline/out*.sql
+baseline/err*.txt
+baseline/reindent.*.sql
+*.pyc
+__pycache__/
