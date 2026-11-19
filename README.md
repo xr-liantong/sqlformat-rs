@@ -90,6 +90,7 @@ the input size rather than the whole token stream (`examples/mem.rs` reports
 cargo fmt --check
 cargo clippy --release --all-targets -- -D warnings
 cargo test --release
+.venv/bin/python tools/check_keywords.py   # 803 keys, merge order, shadowing
 bash tools/parity.sh          # byte parity against the golden files
 ```
 
