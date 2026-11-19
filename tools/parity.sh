@@ -42,12 +42,63 @@ check() {
     rm -f "$out"
 }
 
+check_in() {
+    local name=$1 golden=$2 input=$3
+    shift 3
+    local out
+    out=$(mktemp)
+    if ! "${bin[@]}" "$@" "$input" >"$out"; then
+        echo "FAIL $name: non-zero exit"
+        fail=$((fail + 1))
+        rm -f "$out"
+        return
+    fi
+    if cmp -s "$out" "fixtures/$golden"; then
+        echo "ok   $name ($(stat -c%s "$out") B)"
+        pass=$((pass + 1))
+    else
+        local got
+        got=$(stat -c%s "$out")
+        echo "FAIL $name: got $got B, want $(stat -c%s "fixtures/$golden") B"
+        diff <(head -40 "$out") <(head -40 "fixtures/$golden") | head -20 || true
+        fail=$((fail + 1))
+    fi
+    rm -f "$out"
+}
+
 check default golden-default.sql
 check reindent golden-r.sql -r
 check keywords-upper golden-kupper.sql -k upper
 check keywords-lower golden-klower.sql -k lower
 check identifiers-upper golden-iupper.sql -i upper
 check indent-width-4 golden-iw4.sql --indent_width 4
+
+# v0.2 reindent options, compared on a list/CASE heavy fixture.
+check_in wrap_after-20 golden-wrap20.sql fixtures/lists.sql -r --wrap_after 20
+check_in comma_first golden-comma.sql fixtures/lists.sql -r --comma_first true
+check_in comma_first-wrap_after-30 golden-comma-w30.sql fixtures/lists.sql -r --comma_first true --wrap_after 30
+check_in compact golden-compact.sql fixtures/lists.sql -r --compact true
+check_in all-three golden-all3.sql fixtures/lists.sql -r --wrap_after 22 --comma_first true --compact true
+
+# Limits: more than 10_000 tokens in one list is refused by upstream with
+# exit 1, empty stdout and one stderr line. Compare all three.
+limit_out=$(mktemp)
+limit_err=$(mktemp)
+if "${bin[@]}" -r fixtures/tokens-limit.sql >"$limit_out" 2>"$limit_err"; then
+    echo "FAIL token-limit: expected exit 1, got 0"
+    fail=$((fail + 1))
+elif [[ -s "$limit_out" ]]; then
+    echo "FAIL token-limit: stdout must stay empty"
+    fail=$((fail + 1))
+elif grep -qx "\[ERROR\] Failed to format fixtures/tokens-limit.sql: Maximum number of tokens exceeded (10000)." "$limit_err"; then
+    echo "ok   token-limit (exit 1, empty stdout, one stderr line)"
+    pass=$((pass + 1))
+else
+    echo "FAIL token-limit: unexpected stderr"
+    head -3 "$limit_err"
+    fail=$((fail + 1))
+fi
+rm -f "$limit_out" "$limit_err"
 
 # Unsupported flags must refuse, not guess.
 if "${bin[@]}" -a fixtures/kwcase.sql >/dev/null 2>&1; then

@@ -9,7 +9,7 @@ cargo build --release
 target/release/sqlformat-rs -r schema.sql
 ```
 
-## Scope (v0.1)
+## Scope (v0.2)
 
 Implemented flags:
 
@@ -19,15 +19,27 @@ Implemented flags:
 | `-k`, `--keywords upper\|lower\|capitalize` | keyword case |
 | `-i`, `--identifiers upper\|lower\|capitalize` | identifier case |
 | `--indent_width N` | indent width, default 2 |
+| `--wrap_after N` | re-wrap lists after N columns (`int`; a negative value is a runtime error like upstream) |
+| `--comma_first true` | break *before* the comma (`type=bool`: any non-empty value, even `false`, turns it on) |
+| `--compact true` | no line break before `END` in `CASE` (`type=bool`, same rule) |
 | `-o`, `--outfile FILE` | write to a file instead of stdout |
 | `--in-place` | rewrite the input files |
 | `-h`, `--help`, `--version` | help / upstream version string `0.6.1` |
 
 Input is a file or `-` for stdin, exactly one file unless `--in-place`.
 Every other upstream flag (`-a`, `-s`, `-l`, `--strip-comments`,
-`--indent_after_first`, `--indent_columns`, `--wrap_after`, `--comma_first`,
-`--compact`, `--encoding`, …) exits with status **2** and prints
-`not implemented: <flag>`. See [KNOWN-GAPS.md](KNOWN-GAPS.md).
+`--indent_after_first`, `--indent_columns`, `--encoding`, …) exits with status
+**2** and prints `not implemented: <flag>`. See [KNOWN-GAPS.md](KNOWN-GAPS.md).
+
+### Limits
+
+Upstream refuses to group more than 10,000 tokens in one list and more than 100
+levels of nesting, as `SQLParseError`s; the CLI turns either into
+`[ERROR] Failed to format <file>: …` with status **1** and an empty stdout. Both
+guards are reproduced byte for byte — `fixtures/tokens-limit.sql` and the
+`token_limit_matches_upstream` test cover the first, a 150-deep parenthesis
+nesting covers the second. Grouping is lazy: without `-r` the same file passes
+through untouched, exactly like upstream.
 
 ## Parity
 

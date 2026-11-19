@@ -54,6 +54,31 @@ fn assert_golden(args: &[&str], golden: &str) {
     );
 }
 
+fn assert_golden_input(args: &[&str], golden: &str, input: &str) {
+    let fixture = fixtures();
+    let expected = std::fs::read(fixture.join(golden)).unwrap_or_else(|error| {
+        panic!("missing golden {}: {error}", fixture.join(golden).display())
+    });
+    let mut full = args.to_vec();
+    let input = fixture.join(input);
+    let input = input.to_str().expect("utf-8 path");
+    full.push(input);
+    let got = run(&full);
+    assert_eq!(
+        got.len(),
+        expected.len(),
+        "{args:?} vs {golden}: length differs (got {} want {})",
+        got.len(),
+        expected.len()
+    );
+    let at = got.iter().zip(&expected).position(|(a, b)| a != b);
+    assert!(
+        at.is_none(),
+        "{args:?} vs {golden}: first difference at byte {:?}",
+        at
+    );
+}
+
 #[test]
 fn default_matches_upstream() {
     assert_golden(&[], "golden-default.sql");
@@ -78,6 +103,119 @@ fn identifier_case_matches_upstream() {
 #[test]
 fn indent_width_without_reindent_matches_upstream() {
     assert_golden(&["--indent_width", "4"], "golden-iw4.sql");
+}
+
+#[test]
+fn reindent_options_match_upstream() {
+    // v0.2 options, compared on a fixture with long lists, CASE and VALUES.
+    assert_golden_input(
+        &["-r", "--wrap_after", "20"],
+        "golden-wrap20.sql",
+        "lists.sql",
+    );
+    assert_golden_input(
+        &["-r", "--comma_first", "true"],
+        "golden-comma.sql",
+        "lists.sql",
+    );
+    assert_golden_input(
+        &["-r", "--comma_first", "true", "--wrap_after", "30"],
+        "golden-comma-w30.sql",
+        "lists.sql",
+    );
+    assert_golden_input(
+        &["-r", "--compact", "true"],
+        "golden-compact.sql",
+        "lists.sql",
+    );
+    assert_golden_input(
+        &[
+            "-r",
+            "--wrap_after",
+            "22",
+            "--comma_first",
+            "true",
+            "--compact",
+            "true",
+        ],
+        "golden-all3.sql",
+        "lists.sql",
+    );
+}
+
+#[test]
+fn wrap_after_validation_matches_argparse() {
+    // Bad integers are usage errors; a negative int reaches format() and is a
+    // runtime error, exactly like upstream.
+    let input = fixtures().join("lists.sql");
+    for (value, code, needle) in [
+        ("abc", 2, "invalid int value"),
+        ("-3", 1, "wrap_after requires a positive integer"),
+    ] {
+        let out = Command::new(binary())
+            .args(["-r", "--wrap_after", value])
+            .arg(&input)
+            .output()
+            .expect("run");
+        assert_eq!(out.status.code(), Some(code), "wrap_after {value}");
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(
+            stderr.contains(needle),
+            "wrap_after {value} stderr: {stderr}"
+        );
+    }
+}
+
+#[test]
+fn boolean_flags_require_a_value() {
+    // argparse uses type=bool, so `--comma_first` alone is a usage error and
+    // any non-empty string (even "false") turns the option on.
+    let out = Command::new(binary())
+        .arg("--comma_first")
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(2));
+    assert!(String::from_utf8_lossy(&out.stderr).contains("expected one argument"));
+
+    assert_golden_input(
+        &["-r", "--comma_first", "false"],
+        "golden-comma.sql",
+        "lists.sql",
+    );
+}
+
+#[test]
+fn token_limit_matches_upstream() {
+    // sqlparse refuses to group more than 10_000 tokens in one list when a
+    // filter needs the tree; upstream exits 1, writes nothing to stdout and
+    // prints one line on stderr.
+    let input = fixtures().join("tokens-limit.sql");
+    let out = Command::new(binary())
+        .args(["-r"])
+        .arg(&input)
+        .output()
+        .expect("run");
+    assert_eq!(out.status.code(), Some(1));
+    assert!(out.stdout.is_empty(), "stdout must stay empty");
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(
+        stderr.starts_with("[ERROR] Failed to format "),
+        "stderr: {stderr}"
+    );
+    assert!(
+        stderr.ends_with(": Maximum number of tokens exceeded (10000).\n"),
+        "stderr: {stderr}"
+    );
+
+    // Without a filter nothing walks the tree, so the same file passes through
+    // untouched — grouping is lazy upstream too.
+    let out = Command::new(binary()).arg(&input).output().expect("run");
+    assert_eq!(out.status.code(), Some(0));
+    // Upstream echoes the statement without its trailing newline; compare on
+    // trimmed text so a failure prints something readable.
+    let original = std::fs::read_to_string(&input).expect("read input");
+    let got = String::from_utf8(out.stdout).expect("utf-8 output");
+    assert_eq!(got.trim_end(), original.trim_end(), "no-reindent output");
 }
 
 #[test]

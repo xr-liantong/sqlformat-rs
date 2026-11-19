@@ -483,12 +483,34 @@ impl ReindentFilter {
             for token in identifiers {
                 position += tree.cached_len(token) as i64 + 1;
                 if position > self.wrap_after - self.offset {
-                    let adjust = 0;
-                    let Some(idx) = tree.index_of(tlist, token) else {
+                    let mut adjust = 0;
+                    let mut target = token;
+                    if self.comma_first {
+                        // Break before the comma, two columns to the left, and
+                        // make sure the item that follows keeps one space.
+                        adjust = -2;
+                        let Some(idx) = tree.index_of(tlist, token) else {
+                            continue;
+                        };
+                        let Some((_, comma)) = tree.token_prev(tlist, idx, true, false) else {
+                            continue;
+                        };
+                        target = comma;
+                    }
+                    let Some(idx) = tree.index_of(tlist, target) else {
                         continue;
                     };
                     let nl = self.new_nl(tree, adjust);
                     tree.insert_before(tlist, idx, nl);
+                    if self.comma_first {
+                        let idx = tree.index_of(tlist, target).unwrap_or(idx);
+                        if let Some((_, ws)) = tree.token_next(tlist, idx, false, false) {
+                            if !tree.is_whitespace(ws) {
+                                let space = tree.push_leaf(Tk::Whitespace, " ".to_string());
+                                tree.insert_after(tlist, idx, space, true);
+                            }
+                        }
+                    }
                     position = 0;
                 }
             }

@@ -26,10 +26,15 @@ options:
                         width of the indentation (default 2)
   -k, --keywords {upper,lower,capitalize}
   -i, --identifiers {upper,lower,capitalize}
+  --wrap_after WRAP_AFTER
+                        Column after which lists should be wrapped
+  --comma_first COMMA_FIRST
+                        Insert linebreak before comma (default False)
+  --compact COMPACT     Try to produce more compact output (default False)
 ";
 
 /// Flags upstream has but this port does not implement yet.
-const UNSUPPORTED: [&str; 18] = [
+const UNSUPPORTED: [&str; 15] = [
     "-a",
     "--reindent_aligned",
     "-s",
@@ -40,9 +45,6 @@ const UNSUPPORTED: [&str; 18] = [
     "--indent_after_first",
     "--indent_columns",
     "--indent_tabs",
-    "--wrap_after",
-    "--comma_first",
-    "--compact",
     "--encoding",
     "--right_margin",
     "--truncate_strings",
@@ -93,6 +95,7 @@ fn run() -> Result<(), u8> {
     let mut outfile: Option<String> = None;
     let mut in_place = false;
     let mut indent_width: Option<i64> = None;
+    let mut wrap_after: Option<i64> = None;
 
     let mut index = 0;
     while index < args.len() {
@@ -111,6 +114,43 @@ fn run() -> Result<(), u8> {
             _ if UNSUPPORTED.contains(&arg.as_str()) => {
                 eprintln!("not implemented: {arg}");
                 return Err(2);
+            }
+            "--wrap_after" | "--comma_first" | "--compact" => {
+                index += 1;
+                let value = args.get(index).ok_or_else(|| {
+                    usage_error(&format!("argument {arg}: expected one argument"))
+                })?;
+                match arg.as_str() {
+                    "--wrap_after" => match value.parse::<i64>() {
+                        Ok(width) => wrap_after = Some(width),
+                        Err(_) => {
+                            return Err(usage_error(&format!(
+                                "argument --wrap_after: invalid int value: '{value}'"
+                            )))
+                        }
+                    },
+                    // argparse `type=bool`: any non-empty string is True, so
+                    // `--comma_first false` switches it *on*, as upstream does.
+                    "--comma_first" => options.comma_first = !value.is_empty(),
+                    _ => options.compact = !value.is_empty(),
+                }
+            }
+            _ if arg.starts_with("--wrap_after=") => {
+                let value = &arg["--wrap_after=".len()..];
+                match value.parse::<i64>() {
+                    Ok(width) => wrap_after = Some(width),
+                    Err(_) => {
+                        return Err(usage_error(&format!(
+                            "argument --wrap_after: invalid int value: '{value}'"
+                        )))
+                    }
+                }
+            }
+            _ if arg.starts_with("--comma_first=") => {
+                options.comma_first = !arg["--comma_first=".len()..].is_empty();
+            }
+            _ if arg.starts_with("--compact=") => {
+                options.compact = !arg["--compact=".len()..].is_empty();
             }
             "-k" | "--keywords" | "-i" | "--identifiers" | "-o" | "--outfile"
             | "--indent_width" => {
@@ -172,6 +212,14 @@ fn run() -> Result<(), u8> {
             ));
         }
         options.indent_width = width as usize;
+    }
+    if let Some(width) = wrap_after {
+        if width < 0 {
+            return Err(error(
+                "Invalid options: wrap_after requires a positive integer",
+            ));
+        }
+        options.wrap_after = width;
     }
     if files.len() > 1 {
         if outfile.is_some() {

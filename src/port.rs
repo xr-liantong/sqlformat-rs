@@ -16,6 +16,12 @@ pub struct FormatOptions {
     pub keyword_case: Option<String>,
     pub identifier_case: Option<String>,
     pub indent_width: usize,
+    /// `--wrap_after`: wrap identifier lists once a line passes this column.
+    pub wrap_after: i64,
+    /// `--comma_first`: break before the comma instead of after the item.
+    pub comma_first: bool,
+    /// `--compact`: skip the line breaks `CASE` would otherwise get.
+    pub compact: bool,
 }
 
 impl Default for FormatOptions {
@@ -25,13 +31,16 @@ impl Default for FormatOptions {
             keyword_case: None,
             identifier_case: None,
             indent_width: 2,
+            wrap_after: 0,
+            comma_first: false,
+            compact: false,
         }
     }
 }
 
 #[derive(Debug)]
 pub enum PortError {
-    Group(&'static str),
+    Group(String),
 }
 
 impl fmt::Display for PortError {
@@ -63,6 +72,9 @@ pub fn format_sql(sql: &str, options: &FormatOptions) -> Result<String, PortErro
     let mut splitter = Splitter::default();
     let mut strip = StripWhitespace;
     let mut reindent = ReindentFilter::new(options.indent_width);
+    reindent.wrap_after = options.wrap_after;
+    reindent.comma_first = options.comma_first;
+    reindent.compact = options.compact;
     let mut out = String::with_capacity(sql.len() + sql.len() / 4);
 
     while let Some((ttype, start, end)) = lexer.next_token() {

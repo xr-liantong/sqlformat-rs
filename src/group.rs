@@ -13,17 +13,21 @@ pub const MAX_GROUPING_TOKENS: usize = 10_000;
 
 /// Numerical, string and name types the grouping rules accept as operands.
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct GroupError(pub &'static str);
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct GroupError(pub String);
 
 type R = Result<(), GroupError>;
 
 fn depth_check(depth: usize, tokens: usize) -> R {
     if depth > MAX_GROUPING_DEPTH {
-        return Err(GroupError("maximum grouping depth exceeded"));
+        return Err(GroupError(format!(
+            "Maximum grouping depth exceeded ({MAX_GROUPING_DEPTH})."
+        )));
     }
     if tokens > MAX_GROUPING_TOKENS {
-        return Err(GroupError("maximum number of tokens exceeded"));
+        return Err(GroupError(format!(
+            "Maximum number of tokens exceeded ({MAX_GROUPING_TOKENS})."
+        )));
     }
     Ok(())
 }
