@@ -86,16 +86,26 @@ the input size rather than the whole token stream (`examples/mem.rs` reports
 
 ## Quality gates
 
+One command runs every mechanical rule and prints one line per gate:
+
 ```
-cargo fmt --check
-cargo clippy --release --all-targets -- -D warnings
-cargo test --release
-.venv/bin/python tools/check_keywords.py   # 803 keys, merge order, shadowing
-tools/check_tokens.sh                        # token stream vs sqlparse, token by token
-bash tools/parity.sh          # byte parity against the golden files
+tools/gates.sh
 ```
 
-All four are green on the tagged commit. No `unwrap`/`expect`/`panic!` on any
+```
+PASS fmt        cargo fmt --check
+PASS clippy     cargo clippy --release --all-targets -- -D warnings
+PASS test       cargo test --release
+PASS parity     tools/parity.sh            byte parity against the goldens
+PASS keywords   tools/check_keywords.py    803 keys, merge order, shadowing
+PASS tokens     tools/check_tokens.sh      token stream vs sqlparse, token by token
+gates: 6 passed, 0 failed
+```
+
+The script exits non-zero if any gate fails and prints that gate's output. Its
+failure path is itself checked: appending a badly formatted function makes it
+report `FAIL fmt` and exit 1 (verified on 2026-11-19). All six are green on the
+tagged commit. No `unwrap`/`expect`/`panic!` on any
 path that can fail at runtime; the only `unwrap` uses are in tests and in
 `examples/`.
 
