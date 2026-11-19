@@ -91,6 +91,7 @@ cargo fmt --check
 cargo clippy --release --all-targets -- -D warnings
 cargo test --release
 .venv/bin/python tools/check_keywords.py   # 803 keys, merge order, shadowing
+tools/check_tokens.sh                        # token stream vs sqlparse, token by token
 bash tools/parity.sh          # byte parity against the golden files
 ```
 
