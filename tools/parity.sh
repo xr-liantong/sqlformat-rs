@@ -80,6 +80,10 @@ check_in comma_first-wrap_after-30 golden-comma-w30.sql fixtures/lists.sql -r --
 check_in compact golden-compact.sql fixtures/lists.sql -r --compact true
 check_in all-three golden-all3.sql fixtures/lists.sql -r --wrap_after 22 --comma_first true --compact true
 
+# Name.Builtin is not an identifier upstream: no IdentifierList is built from
+# `count(*), TIMESTAMP, MAP, CHARACTER`, so nothing gets split per column.
+check_in builtin-names golden-ddl.sql fixtures/ddl-lists.sql -r
+
 # Limits: more than 10_000 tokens in one list is refused by upstream with
 # exit 1, empty stdout and one stderr line. Compare all three.
 limit_out=$(mktemp)

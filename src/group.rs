@@ -231,7 +231,6 @@ fn rule_valid_prev(tree: &Tree, prev: Option<Id>, rule: Rule) -> bool {
                         Tk::StringSingle,
                         Tk::StringSymbol,
                         Tk::Name,
-                        Tk::NameBuiltin,
                         Tk::NamePlaceholder,
                         Tk::Keyword,
                         Tk::CommentSingle,
@@ -434,7 +433,7 @@ fn group_over(tree: &mut Tree, node: Id) -> R {
         tree.find_child(node, from, |tree, id| tree.matches(id, Tk::Keyword, "OVER"))
     {
         if let Some((nidx, next)) = tree.token_next(node, tidx, true, false) {
-            if tree.is_class(next, Class::Parenthesis) || tree.ttype_in(next, &[Tk::Name]) {
+            if tree.is_class(next, Class::Parenthesis) || tree.ttype_isa(next, &[Tk::Name]) {
                 tree.group_tokens(node, Class::Over, tidx, nidx, false);
             }
         }
@@ -466,7 +465,7 @@ fn group_functions(tree: &mut Tree, node: Id) -> R {
 
     let mut from = 0;
     while let Some((tidx, _)) =
-        tree.find_child(node, from, |tree, id| tree.ttype_in(id, &[Tk::Name]))
+        tree.find_child(node, from, |tree, id| tree.ttype_isa(id, &[Tk::Name]))
     {
         if let Some((nidx, next)) = tree.token_next(node, tidx, true, false) {
             if tree.is_class(next, Class::Parenthesis) {
@@ -486,7 +485,9 @@ fn group_functions(tree: &mut Tree, node: Id) -> R {
 fn group_identifier(tree: &mut Tree, node: Id) -> R {
     let mut from = 0;
     while let Some((tidx, _)) = tree.find_child(node, from, |tree, id| {
-        tree.ttype_in(id, &[Tk::StringSymbol, Tk::Name])
+        // upstream `token_next_by(t=(T.String.Symbol, T.Name))` is an exact
+        // match: `Name.Builtin` / `Name.Placeholder` are *not* wrapped here.
+        matches!(tree.ttype(id), Some(Tk::StringSymbol) | Some(Tk::Name))
     }) {
         tree.group_tokens(node, Class::Identifier, tidx, tidx, false);
         from = tidx + 1;
@@ -501,7 +502,7 @@ fn group_order(tree: &mut Tree, node: Id) -> R {
         let mut current = tidx;
         if let Some((pidx, prev)) = tree.token_prev(node, current, true, false) {
             if tree.is_class(prev, Class::Identifier)
-                || tree.ttype_in(prev, &[Tk::NumberInteger, Tk::NumberFloat])
+                || tree.ttype(prev).is_some_and(|t| t.is_number())
             {
                 tree.group_tokens(node, Class::Identifier, pidx, current, false);
                 current = pidx;

@@ -280,7 +280,22 @@ impl Tree {
     }
 
     /// `imt(token, t=...)`: is the type inside the given subtree(s)?
+    /// `token.ttype in (a, b, c)`: tuple membership is an **exact** compare.
+    ///
+    /// sqlparse is subtle here: `imt(t=(A, B))` / `token_next_by(t=(A, B))`
+    /// test `token.ttype in tuple`, i.e. equality with each element, so
+    /// `Name.Builtin` does *not* match `Name`. Passing a single
+    /// `_TokenType` instead uses its `__contains__`, which is the parent
+    /// test -- see [`Tree::ttype_isa`].
     pub fn ttype_in(&self, id: Id, parents: &[Tk]) -> bool {
+        match self.nodes[id].ttype {
+            None => false,
+            Some(ttype) => parents.contains(&ttype),
+        }
+    }
+
+    /// `token.ttype in Token.Name`: the parent/subtype test.
+    pub fn ttype_isa(&self, id: Id, parents: &[Tk]) -> bool {
         match self.nodes[id].ttype {
             None => false,
             Some(ttype) => parents.iter().any(|parent| ttype.is_a(*parent)),
@@ -412,7 +427,7 @@ impl Tree {
 
     /// `token_next_by(t=ttype)`.
     pub fn next_by_ttype(&self, parent: Id, from: usize, ttype: Tk) -> Option<(usize, Id)> {
-        self.find_child(parent, from, |tree, id| tree.ttype_in(id, &[ttype]))
+        self.find_child(parent, from, |tree, id| tree.ttype_isa(id, &[ttype]))
     }
 
     /// `group_tokens(cls, start, end, extend)` on `parent`'s children.

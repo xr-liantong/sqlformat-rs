@@ -105,6 +105,14 @@ fn indent_width_without_reindent_matches_upstream() {
     assert_golden(&["--indent_width", "4"], "golden-iw4.sql");
 }
 
+/// `Name.Builtin` is not an identifier: upstream keeps
+/// `CREATE TABLE t (a INT, b TEXT)` on one line and never builds an
+/// IdentifierList out of `count(*), TIMESTAMP, MAP, CHARACTER`.
+#[test]
+fn builtin_names_do_not_form_identifier_lists() {
+    assert_golden_input(&["-r"], "golden-ddl.sql", "ddl-lists.sql");
+}
+
 #[test]
 fn reindent_options_match_upstream() {
     // v0.2 options, compared on a fixture with long lists, CASE and VALUES.
