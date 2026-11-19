@@ -505,7 +505,13 @@ impl ReindentFilter {
                     if self.comma_first {
                         let idx = tree.index_of(tlist, target).unwrap_or(idx);
                         if let Some((_, ws)) = tree.token_next(tlist, idx, false, false) {
-                            if !tree.is_whitespace(ws) {
+                            // Upstream compares the token type against
+                            // `T.Text.Whitespace` exactly, so a newline
+                            // (`T.Text.Whitespace.Newline`) does not count as
+                            // whitespace here and gets an extra space: that is
+                            // the two spaces after a comma that ends a line.
+                            let plain_ws = matches!(tree.ttype(ws), Some(Tk::Whitespace));
+                            if !plain_ws {
                                 let space = tree.push_leaf(Tk::Whitespace, " ".to_string());
                                 tree.insert_after(tlist, idx, space, true);
                             }

@@ -82,6 +82,8 @@ check_in all-three golden-all3.sql fixtures/lists.sql -r --wrap_after 22 --comma
 
 # Name.Builtin is not an identifier upstream: no IdentifierList is built from
 # `count(*), TIMESTAMP, MAP, CHARACTER`, so nothing gets split per column.
+check_in comma-multiline golden-comma-multiline.sql fixtures/comma-multiline.sql -r --comma_first true
+check_in plain-multiline golden-plain-multiline.sql fixtures/comma-multiline.sql -r
 check_in builtin-names golden-ddl.sql fixtures/ddl-lists.sql -r
 
 # Limits: more than 10_000 tokens in one list is refused by upstream with
