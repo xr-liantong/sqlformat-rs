@@ -65,6 +65,20 @@ runs each, wall clock and peak RSS (`baseline/run.py`, `ru_maxrss`):
 ≈19.2x faster, 0.40x the memory. Measured on one machine, one input; not a
 general benchmark.
 
+### Measurement variance
+
+The box is shared, so wall clock drifts between sessions. Two independent
+sessions on the same corpus:
+
+| session | `sqlformat-rs` median | `sqlformat` median | ratio |
+| --- | --- | --- | --- |
+| first | 1.03 s | 19.76 s | 19.2x |
+| re-run (later, busier) | 2.01 s (1.59 / 2.01 / 2.10) | 23.32 s (23.32 / 24.79 / 23.04) | 11.6x |
+
+Both runs produced the identical 3,578,891 B output. The acceptance floor is
+3x, so the worst observed pair still clears it by ~3.9x; quote the ratio as
+11.6x–19.2x rather than a single number.
+
 The pipeline is streamed: one statement is lexed, grouped, stripped,
 reindented and serialized before the next is read, so peak memory stays near
 the input size rather than the whole token stream (`examples/mem.rs` reports

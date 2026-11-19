@@ -86,3 +86,18 @@ runs with `python3 baseline/run.py`:
 
 Same output sha256 `c481988a319df7a5b6ce332c...`. Speedup 19.2x, RSS 0.40x.
 Details: `reports/2026-11-19-sqlformat-rs-streaming.md`.
+
+## Re-measure (later session, same corpus, same command)
+
+Same box, same `fixtures/corpus-20k.sql` (sha `4cf98f93…`), `sqlformat -r`
+versus `sqlformat-rs -r`, three runs each, outputs compared byte for byte:
+
+| tool | runs (wall) | median | peak RSS |
+|---|---|---|---|
+| `sqlformat-rs` | 1.585 / 2.009 / 2.104 s | **2.009 s** | 15,104 KB |
+| `sqlformat` 0.6.1 | 23.318 / 24.788 / 23.042 s | **23.318 s** | 31,696 KB |
+
+- both outputs: 3,578,891 B, `cmp` clean (`RUST_VS_UPSTREAM_BYTE_IDENTICAL`).
+- ratio 11.6x on wall, 0.48x on RSS. The earlier measurement in the section
+  above gave 19.2x; the box is shared, so report the range, not one number.
+- acceptance floor is 3x: the worst observed pair (11.6x) still clears it.
