@@ -33,7 +33,10 @@ Out of scope: `parse()` / Token API, `--strip-comments`, file arguments,
 2. **`-k/--keywords` is `{upper, lower, capitalize}`**, applied to the
    `Keyword` subtree only (`Name.Builtin` is *not* touched; `-i` touches the
    `Name` subtree).
-3. 913 declared keys, 10 shadowed by earlier tables; 3 change type:
+3. 813 declared keys across the nine tables, 803 after shadowing; 10 keys are
+   declared twice, and of those only 3 change type (re-derived on the box with
+   `tools/check_keywords.py`, which asserts the table against `sqlparse`
+   itself — the spec's "913 keys / 10 shadowings" was off):
    `MAP`/`TIMESTAMP` → `Name.Builtin` (HQL wins), `CHARACTER` → `Keyword`
    (PLPGSQL wins). **No `HashMap` insert-overwrite** — the merge order is the
    semantics; a map that overwrites silently inverts these ten.
@@ -45,6 +48,31 @@ Out of scope: `parse()` / Token API, `--strip-comments`, file arguments,
    Unicode classes the spec assumes.
 6. Python `\w` is `isalnum()`, Rust `\w` also matches combining marks and
    connector punctuation — compare with an explicit predicate, not `\w`.
+
+## Baseline and status (2026-11-19, box)
+
+Chief's baseline for the brief: 3.1 MB / 20,000 statements → **28.30 s**,
+output 4,895,557 B, RSS 36,652 KB. That was a different corpus (its output is
+1.37x larger per statement), so it is the sanity check, not the acceptance
+number.
+
+Our corpus: `fixtures/corpus-20k.sql`, 3,038,894 B / 20,000 single-line
+`SELECT`, sha256 `4cf98f93…`, upstream `-r` output 3,578,891 B
+(sha256 `c481988a…`). Three runs each:
+
+| tool | median wall | peak RSS |
+|---|---|---|
+| `sqlformat` 0.6.1 (CPython 3.12) | 23.318 s (23.32 / 24.79 / 23.04) | 31,696 KB |
+| `sqlformat-rs` (this port) | 2.009 s (1.59 / 2.01 / 2.10) | 15,104 KB |
+
+11.6x on wall, 0.48x RSS; an earlier session measured 19.2x (1.03 vs 19.76 s)
+on the same corpus, so the box's load varies — quote 11.6x–19.2x. The 3x
+acceptance floor is met by the worst run (3.9x).
+
+Milestones 1–5 above are **done**: table generated and asserted, lexer
+token-identical over 1,040,000 tokens, `-r` byte-identical on the corpus,
+7/7 golden parity, 33 tests, `fmt`/`clippy -D warnings` clean, tag `v0.1.0`
+on `xr-liantong/sqlformat-rs`.
 
 ## Acceptance
 
@@ -61,8 +89,8 @@ Out of scope: `parse()` / Token API, `--strip-comments`, file arguments,
 ## Milestones (one reportable result per ~40 min)
 
 1. upstream baseline measured on box (sqlparse 0.6.1 installed in a venv)
-2. keyword table generated and unit-tested (803 keys, 10 shadowings, 3
-   retypes asserted by name)
+2. keyword table generated and unit-tested (803 keys; the 3 retyped keys
+   `MAP`/`TIMESTAMP`/`CHARACTER` asserted by name)
 3. lexer: 50 regexes ported, token stream identical to Python on the fixtures
 4. formatter: `-r` output byte-identical on fixture 1
 5. all fixtures byte-identical + gates green + tag v0.1.0
