@@ -144,6 +144,28 @@ fn reindent_options_match_upstream() {
 }
 
 #[test]
+fn ddl_column_lists_match_upstream() {
+    // issue #3: `INT`/`TEXT` are Name.Builtin upstream, which is not in
+    // T_NAME, so the column list never becomes an IdentifierList.
+    assert_golden_input(
+        &["-r", "-k", "upper"],
+        "golden-ddl-multicol.sql",
+        "ddl-multicol.sql",
+    );
+}
+
+#[test]
+fn comma_first_after_newline_matches_upstream() {
+    // issue #4: a newline after the comma is not Text.Whitespace, so the extra
+    // space is inserted as well.
+    assert_golden_input(
+        &["-r", "--comma_first", "true"],
+        "golden-comma-multiline.sql",
+        "comma-multiline.sql",
+    );
+}
+
+#[test]
 fn wrap_after_validation_matches_argparse() {
     // Bad integers are usage errors; a negative int reaches format() and is a
     // runtime error, exactly like upstream.
