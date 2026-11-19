@@ -176,6 +176,7 @@ fn rule_valid_prev(tree: &Tree, prev: Option<Id>, rule: Rule) -> bool {
                     Tk::StringSingle,
                     Tk::StringSymbol,
                     Tk::Name,
+                    Tk::NameBuiltin,
                     Tk::NamePlaceholder,
                 ],
             ) || (tree.is_keyword(prev) && tree.normalized(prev) == "NULL")
@@ -200,6 +201,7 @@ fn rule_valid_prev(tree: &Tree, prev: Option<Id>, rule: Rule) -> bool {
                     Tk::StringSingle,
                     Tk::StringSymbol,
                     Tk::Name,
+                    Tk::NameBuiltin,
                     Tk::NamePlaceholder,
                 ],
             ) || tree.matches_any(
@@ -229,6 +231,7 @@ fn rule_valid_prev(tree: &Tree, prev: Option<Id>, rule: Rule) -> bool {
                         Tk::StringSingle,
                         Tk::StringSymbol,
                         Tk::Name,
+                        Tk::NameBuiltin,
                         Tk::NamePlaceholder,
                         Tk::Keyword,
                         Tk::CommentSingle,

@@ -505,9 +505,7 @@ impl ReindentFilter {
                     if self.comma_first {
                         let idx = tree.index_of(tlist, target).unwrap_or(idx);
                         if let Some((_, ws)) = tree.token_next(tlist, idx, false, false) {
-                            // Upstream: `ws.ttype is not T.Text.Whitespace`, so a
-                            // newline token does not count as existing whitespace.
-                            if tree.ttype(ws) != Some(Tk::Whitespace) {
+                            if !tree.is_whitespace(ws) {
                                 let space = tree.push_leaf(Tk::Whitespace, " ".to_string());
                                 tree.insert_after(tlist, idx, space, true);
                             }

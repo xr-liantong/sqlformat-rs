@@ -283,9 +283,6 @@ impl Tree {
     pub fn ttype_in(&self, id: Id, parents: &[Tk]) -> bool {
         match self.nodes[id].ttype {
             None => false,
-            // Python's `token.ttype in ttypes` is tuple membership, i.e. exact
-            // equality: T.Name.Builtin is not in (T.Name,). `is_a` would also
-            // accept sub-types and break grouping for DDL/typed literals.
             Some(ttype) => parents.iter().any(|parent| ttype.is_a(*parent)),
         }
     }
