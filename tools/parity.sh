@@ -25,7 +25,9 @@ EXPECTED_CASES=31
 # Cross-check the hard-coded total against the case table itself.  Both ways:
 # a case commented out leaves the table shorter than EXPECTED_CASES, and a
 # total edited down leaves it longer.  Neither can pass silently.
-listed=$(( $(grep -cE '^(check|check_in|check_file_first|check_enc) ' "$0") + 2 ))
+# One case lives outside the table on purpose: the token-limit run needs to
+# inspect stdout and stderr separately, so the sum is table + 1.
+listed=$(( $(grep -cE '^(check|check_in|check_file_first|check_enc) ' "$0") + 1 ))
 if [ "$listed" -ne "$EXPECTED_CASES" ]; then
     echo "parity: the case table lists $listed cases, EXPECTED_CASES=$EXPECTED_CASES" >&2
     exit 2
@@ -130,6 +132,7 @@ check_in comma_first golden-comma.sql fixtures/lists.sql -r --comma_first true
 check_in comma_first-wrap_after-30 golden-comma-w30.sql fixtures/lists.sql -r --comma_first true --wrap_after 30
 check_in compact golden-compact.sql fixtures/lists.sql -r --compact true
 check_in all-three golden-all3.sql fixtures/lists.sql -r --wrap_after 22 --comma_first true --compact true
+check_in reindent-aligned golden-a.sql fixtures/kwcase.sql -a
 
 # Name.Builtin is not an identifier upstream: no IdentifierList is built from
 # `count(*), TIMESTAMP, MAP, CHARACTER`, so nothing gets split per column.
@@ -163,21 +166,6 @@ else
     fail=$((fail + 1))
 fi
 rm -f "$limit_out" "$limit_err"
-
-# Unsupported flags must refuse, not guess.
-if "${bin[@]}" -a fixtures/kwcase.sql >/dev/null 2>&1; then
-    echo "FAIL -a: expected exit 2, got 0"
-    fail=$((fail + 1))
-else
-    code=$?
-    if [[ $code -eq 2 ]]; then
-        echo "ok   -a exits 2"
-        pass=$((pass + 1))
-    else
-        echo "FAIL -a: expected exit 2, got $code"
-        fail=$((fail + 1))
-    fi
-fi
 
 handled=$((pass + fail))
 if [[ $handled -ne $EXPECTED_CASES ]]; then

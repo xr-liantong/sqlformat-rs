@@ -302,3 +302,17 @@ fn language_wraps_statements_like_upstream() {
          (choose from 'python', 'php')\n"
     );
 }
+
+/// `-a/--reindent_aligned` is checked against the upstream golden: the fixture
+/// holds the layouts that broke the first draft (identifier lists, a `CASE`
+/// with `ELSE`/`END`, a subquery in parentheses, `BETWEEN … AND`, `GROUP BY`).
+#[test]
+fn reindent_aligned_matches_the_upstream_golden() {
+    let golden = std::fs::read("fixtures/golden-a.sql").expect("read golden");
+    let output = Command::new(binary())
+        .args(["-a", "fixtures/kwcase.sql"])
+        .output()
+        .expect("spawn");
+    assert_eq!(output.status.code(), Some(0), "stderr: {:?}", output.stderr);
+    assert_eq!(output.stdout, golden);
+}

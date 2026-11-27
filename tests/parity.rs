@@ -228,15 +228,18 @@ fn token_limit_matches_upstream() {
 
 #[test]
 fn unsupported_flag_exits_two() {
+    // Every flag upstream's CLI accepts is implemented; what is left are the
+    // `sqlparse.format()` keyword arguments upstream's argv never took. The
+    // port refuses them by name instead of silently ignoring them.
     let out = Command::new(binary())
-        .arg("-a")
+        .args(["--right_margin", "40"])
         .arg(fixtures().join("kwcase.sql"))
         .output()
         .expect("run");
     assert_eq!(out.status.code(), Some(2));
     assert!(
         String::from_utf8_lossy(&out.stderr)
-            .contains("sqlformat: error: option -a is not implemented by this port"),
+            .contains("sqlformat: error: option --right_margin is not implemented by this port"),
         "stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );

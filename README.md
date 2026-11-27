@@ -28,6 +28,7 @@ Implemented flags:
 | `--indent_columns` | lay identifier lists out at `--indent_width`; implies `-r` (as `validate_options` does) |
 | `--indent_after_first` | indent every continuation line, i.e. everything after the first line of a statement |
 | `-l`, `--language python\|php` | wrap each statement as `sql = ('…')` / `$sql  = "…"` source (`sql2`, `sql3`, … after the first) |
+| `-a`, `--reindent_aligned` | align the keywords in a column (`select`/`from`/`where` at the same column) and pad `CASE`/`WHEN` conditions; implies `-r` |
 | `-o`, `--outfile FILE` | write to a file instead of stdout |
 | `--in-place` | rewrite the input files |
 | `-h`, `--help`, `--version` | help / upstream version string `0.6.1` |
@@ -37,8 +38,8 @@ The help text, the argparse refusals (`usage:` plus `sqlformat: error: …`,
 exit 2) and the `[ERROR] …` lines are byte-identical to upstream — including
 the fixed `prog='sqlformat'`, the `[Errno N] strerror: 'path'` shape, and the
 attached-value forms `-k=upper` / `-kupper` / `--keywords=upper`.
-`tools/cli_matrix.sh` compares 46 such invocations against a live upstream and
-pins 5 flags as *known gaps* (a gap that starts matching fails the script).
+`tools/cli_matrix.sh` compares 48 such invocations against a live upstream and
+pins 4 flags as *known gaps* (a gap that starts matching fails the script).
 
 `--encoding` accepts the codecs `sqlformat` users actually keep `.sql` files
 in — `utf-8`, `ascii`, `latin-1` (and its `iso-8859-1` aliases), `cp1252`, and
@@ -54,8 +55,10 @@ candidates in definition order (`ambiguous option: --i could match --in-place,
 --identifiers, --indent_width, --indent_after_first, --indent_columns`). A
 filename does not have to be UTF-8; it is passed through as bytes.
 
-Every other upstream flag (`-a`, `--reindent_aligned`) exits with status
-**2** and prints
+Every flag the upstream `sqlformat` binary accepts is implemented. The only
+refusals left are the keyword arguments that upstream's CLI itself rejects
+(`--right_margin`, `--truncate_strings`, `--truncate_char`), which exit with
+status **2** and
 `sqlformat: error: option <flag> is not implemented by this port`. See
 [KNOWN-GAPS.md](KNOWN-GAPS.md).
 

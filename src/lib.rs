@@ -1,5 +1,6 @@
 //! A Rust port of the `sqlformat` CLI from python-sqlparse 0.6.1.
 
+pub mod aligned;
 pub mod encoding;
 pub mod filters;
 pub mod group;

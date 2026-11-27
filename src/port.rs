@@ -2,6 +2,7 @@
 
 use std::fmt;
 
+use crate::aligned::AlignedIndentFilter;
 use crate::filters::{self, split_unquoted_newlines, ReindentFilter, StripWhitespace};
 use crate::group;
 use crate::lexer::{Lexer, Token};
@@ -32,6 +33,8 @@ pub struct FormatOptions {
     pub indent_columns: bool,
     /// `-l/--language`: wrap each statement as `python` or `php` source.
     pub output_format: Option<String>,
+    /// `-a/--reindent_aligned`: the aligned keyword layout.
+    pub reindent_aligned: bool,
 }
 
 impl Default for FormatOptions {
@@ -49,6 +52,7 @@ impl Default for FormatOptions {
             indent_after_first: false,
             indent_columns: false,
             output_format: None,
+            reindent_aligned: false,
         }
     }
 }
@@ -322,7 +326,10 @@ fn emit(
     let root = tree.root;
     // `FilterStack.enable_grouping` is called by the three filters that need
     // it, so grouping happens exactly when one of them is on.
-    let grouped = options.reindent || options.space_around_operators || options.strip_comments;
+    let grouped = options.reindent
+        || options.reindent_aligned
+        || options.space_around_operators
+        || options.strip_comments;
     if grouped {
         group::group(&mut tree)?;
     }
@@ -334,9 +341,17 @@ fn emit(
     } else {
         None
     };
-    if options.reindent {
+    if options.reindent || options.reindent_aligned {
         strip.process(&mut tree, root);
+    }
+    if options.reindent {
         reindent.process(&mut tree, root);
+    }
+    // `validate_options`: `reindent_aligned` forces `strip_whitespace`; the
+    // filter itself runs after `ReindentFilter` in `build_filter_stack`.
+    if options.reindent_aligned {
+        let mut aligned = AlignedIndentFilter::new();
+        aligned.process(&mut tree, root);
     }
     match options.output_format.as_deref() {
         Some(format) => {

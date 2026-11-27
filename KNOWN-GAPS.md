@@ -10,9 +10,11 @@ port` on stderr and exits 2 (a wrong guess is worse than a refusal).
 `tools/cli_matrix.sh` pins each of these as a *known gap*: if one ever starts
 matching upstream, the script fails so this file gets updated.
 
-CLI flags the upstream `sqlformat` binary really accepts:
-
-- `-a`, `--reindent_aligned` — needs `AlignedIndentFilter`
+Every CLI flag the upstream `sqlformat` binary accepts is implemented as of
+`-a/--reindent_aligned`; the list above is empty. What remains below are
+`sqlparse.format()` keyword arguments that the upstream CLI rejects too, plus
+the behavioural gaps further down (error frames, `-l` with a pre-filter,
+`-r --strip-comments` before `)`).
 
 Keyword arguments of `sqlparse.format()` that the upstream CLI never accepted
 (`--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
@@ -21,6 +23,15 @@ v0.2 we print the same `unrecognized arguments: <flag>` line):
 
 - `--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
   `--output_format`
+
+`-a/--reindent_aligned` matches upstream byte for byte on every fixture and on
+the 3.5 MB corpus (`08d52f58…`): the keyword column is `len('select')` = 6
+spaces, `from`/`where`/`and` are right-aligned against it, joins and
+`GROUP BY`/`ORDER BY` align on their first word only, `BETWEEN … AND` is one
+statement, a parenthesis is only re-indented when it contains a `SELECT`, and
+`CASE` conditions are padded to the widest condition with `END` in its own
+column. The filter runs after `ReindentFilter` because `build_filter_stack`
+appends it there.
 
 `-l/--language python|php` landed last: each statement is wrapped like
 `OutputPythonFilter` / `OutputPHPFilter` does (`sql = ('…')`, `$sql  = "…"`,

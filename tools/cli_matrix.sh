@@ -132,10 +132,11 @@ run -s -r op.sql
 run --indent_columns op.sql
 run -r --indent_after_first op.sql
 run --indent_columns --indent_after_first op.sql
+run -a op.sql
+run --reindent_aligned op.sql
 # A comment directly before `)` survives as one space upstream; the port
 # drops it (see docs/KNOWN-GAPS.md).
 gap --strip-comments -r par.sql
-gap -a s1.sql
 
 if [ "$fails" -eq 0 ]; then
     echo "cli: $cases/$cases cases match upstream byte for byte; $gaps known gaps still refused"

@@ -52,13 +52,7 @@ Formatting Options:
 ";
 
 /// Flags upstream has but this port does not implement yet.
-const UNSUPPORTED: [&str; 5] = [
-    "-a",
-    "--reindent_aligned",
-    "--right_margin",
-    "--truncate_strings",
-    "--truncate_char",
-];
+const UNSUPPORTED: [&str; 3] = ["--right_margin", "--truncate_strings", "--truncate_char"];
 
 fn main() -> ExitCode {
     match run() {
@@ -272,6 +266,7 @@ fn run() -> Result<(), u8> {
             "--in-place" => in_place = true,
             "--strip-comments" => options.strip_comments = true,
             "-s" | "--use_space_around_operators" => options.space_around_operators = true,
+            "-a" | "--reindent_aligned" => options.reindent_aligned = true,
             "--indent_after_first" => options.indent_after_first = true,
             // `validate_options`: indent_columns enforces reindent, and reindent
             // enforces strip_whitespace.
