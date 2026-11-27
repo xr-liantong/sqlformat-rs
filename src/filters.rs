@@ -213,7 +213,7 @@ pub struct ReindentFilter {
     pub indent_after_first: bool,
     pub indent_columns: bool,
     pub compact: bool,
-    indent: i64,
+    pub indent: i64,
     offset: i64,
     curr_stmt: Option<Id>,
     last_stmt_text: Option<String>,

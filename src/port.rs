@@ -26,6 +26,10 @@ pub struct FormatOptions {
     pub strip_comments: bool,
     /// `-s/--use_space_around_operators`: one space on each side of operators.
     pub space_around_operators: bool,
+    /// `--indent_after_first`: indent everything after the first line.
+    pub indent_after_first: bool,
+    /// `--indent_columns`: lay the identifier list out by column width.
+    pub indent_columns: bool,
 }
 
 impl Default for FormatOptions {
@@ -40,6 +44,8 @@ impl Default for FormatOptions {
             compact: false,
             strip_comments: false,
             space_around_operators: false,
+            indent_after_first: false,
+            indent_columns: false,
         }
     }
 }
@@ -81,6 +87,10 @@ pub fn format_sql(sql: &str, options: &FormatOptions) -> Result<String, PortErro
     reindent.wrap_after = options.wrap_after;
     reindent.comma_first = options.comma_first;
     reindent.compact = options.compact;
+    reindent.indent_after_first = options.indent_after_first;
+    reindent.indent_columns = options.indent_columns;
+    // Upstream `ReindentFilter.__init__`: `self.indent = 1 if indent_after_first else 0`.
+    reindent.indent = if options.indent_after_first { 1 } else { 0 };
     let mut out = String::with_capacity(sql.len() + sql.len() / 4);
 
     while let Some((ttype, start, end)) = lexer.next_token() {
