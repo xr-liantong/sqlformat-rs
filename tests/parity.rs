@@ -235,7 +235,8 @@ fn unsupported_flag_exits_two() {
         .expect("run");
     assert_eq!(out.status.code(), Some(2));
     assert!(
-        String::from_utf8_lossy(&out.stderr).contains("not implemented: -a"),
+        String::from_utf8_lossy(&out.stderr)
+            .contains("sqlformat: error: option -a is not implemented by this port"),
         "stderr: {}",
         String::from_utf8_lossy(&out.stderr)
     );
@@ -257,7 +258,7 @@ fn invalid_option_values_exit_two() {
         assert_eq!(out.status.code(), Some(2), "{args:?} exit code");
         let stderr = String::from_utf8_lossy(&out.stderr);
         assert!(
-            stderr.starts_with("usage: sqlformat-rs"),
+            stderr.starts_with("usage: sqlformat [OPTIONS] FILE [FILE ...]\n"),
             "{args:?} stderr: {stderr}"
         );
     }

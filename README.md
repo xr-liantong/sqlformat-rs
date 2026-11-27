@@ -27,9 +27,17 @@ Implemented flags:
 | `-h`, `--help`, `--version` | help / upstream version string `0.6.1` |
 
 Input is a file or `-` for stdin, exactly one file unless `--in-place`.
+The help text, the argparse refusals (`usage:` plus `sqlformat: error: …`,
+exit 2) and the `[ERROR] …` lines are byte-identical to upstream — including
+the fixed `prog='sqlformat'`, the `[Errno N] strerror: 'path'` shape, and the
+attached-value forms `-k=upper` / `-kupper` / `--keywords=upper`.
+`tools/cli_matrix.sh` compares 26 such invocations against a live upstream and
+pins 7 flags as *known gaps* (a gap that starts matching fails the script).
+
 Every other upstream flag (`-a`, `-s`, `-l`, `--strip-comments`,
-`--indent_after_first`, `--indent_columns`, `--encoding`, …) exits with status
-**2** and prints `not implemented: <flag>`. See [KNOWN-GAPS.md](KNOWN-GAPS.md).
+`--indent_after_first`, `--indent_columns`, `--encoding`) exits with status
+**2** and prints `sqlformat: error: option <flag> is not implemented by this
+port`. See [KNOWN-GAPS.md](KNOWN-GAPS.md).
 
 ### Limits
 

@@ -1,0 +1,41 @@
+usage: sqlformat [OPTIONS] FILE [FILE ...]
+
+Format FILE according to OPTIONS. Use "-" as FILE to read from stdin.
+
+positional arguments:
+  filename              file(s) to format (use "-" for stdin)
+
+options:
+  -h, --help            show this help message and exit
+  -o FILE, --outfile FILE
+                        write output to FILE (defaults to stdout)
+  --in-place            format files in-place (overwrite existing files)
+  --version             show program's version number and exit
+
+Formatting Options:
+  -k CHOICE, --keywords CHOICE
+                        change case of keywords, CHOICE is one of "upper",
+                        "lower", "capitalize"
+  -i CHOICE, --identifiers CHOICE
+                        change case of identifiers, CHOICE is one of "upper",
+                        "lower", "capitalize"
+  -l LANG, --language LANG
+                        output a snippet in programming language LANG, choices
+                        are "python", "php"
+  --strip-comments      remove comments
+  -r, --reindent        reindent statements
+  --indent_width INDENT_WIDTH
+                        indentation width (defaults to 2 spaces)
+  --indent_after_first  indent after first line of statement (e.g. SELECT)
+  --indent_columns      indent all columns by indent_width instead of keyword
+                        length
+  -a, --reindent_aligned
+                        reindent statements to aligned format
+  -s, --use_space_around_operators
+                        place spaces around mathematical operators
+  --wrap_after WRAP_AFTER
+                        Column after which lists should be wrapped
+  --comma_first COMMA_FIRST
+                        Insert linebreak before comma (default False)
+  --compact COMPACT     Try to produce more compact output (default False)
+  --encoding ENCODING   Specify the input encoding (default utf-8)

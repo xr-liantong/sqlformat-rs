@@ -7,30 +7,47 @@ use std::process::ExitCode;
 use sqlformat_rs::port::{format_sql, FormatOptions};
 
 const USAGE: &str = "\
-usage: sqlformat [-h] [-o OUTFILE] [--version] [--in-place] [-r]
-                 [--indent_width INDENT_WIDTH] [-k {upper,lower,capitalize}]
-                 [-i {upper,lower,capitalize}]
-                 filename [filename ...]
+usage: sqlformat [OPTIONS] FILE [FILE ...]
+
+Format FILE according to OPTIONS. Use \"-\" as FILE to read from stdin.
 
 positional arguments:
-  filename              file to format, or '-' for stdin
+  filename              file(s) to format (use \"-\" for stdin)
 
 options:
   -h, --help            show this help message and exit
-  -o OUTFILE, --outfile OUTFILE
-                        write output to a file
+  -o FILE, --outfile FILE
+                        write output to FILE (defaults to stdout)
+  --in-place            format files in-place (overwrite existing files)
   --version             show program's version number and exit
-  --in-place            rewrite the file in place
+
+Formatting Options:
+  -k CHOICE, --keywords CHOICE
+                        change case of keywords, CHOICE is one of \"upper\",
+                        \"lower\", \"capitalize\"
+  -i CHOICE, --identifiers CHOICE
+                        change case of identifiers, CHOICE is one of \"upper\",
+                        \"lower\", \"capitalize\"
+  -l LANG, --language LANG
+                        output a snippet in programming language LANG, choices
+                        are \"python\", \"php\"
+  --strip-comments      remove comments
   -r, --reindent        reindent statements
   --indent_width INDENT_WIDTH
-                        width of the indentation (default 2)
-  -k, --keywords {upper,lower,capitalize}
-  -i, --identifiers {upper,lower,capitalize}
+                        indentation width (defaults to 2 spaces)
+  --indent_after_first  indent after first line of statement (e.g. SELECT)
+  --indent_columns      indent all columns by indent_width instead of keyword
+                        length
+  -a, --reindent_aligned
+                        reindent statements to aligned format
+  -s, --use_space_around_operators
+                        place spaces around mathematical operators
   --wrap_after WRAP_AFTER
                         Column after which lists should be wrapped
   --comma_first COMMA_FIRST
                         Insert linebreak before comma (default False)
   --compact COMPACT     Try to produce more compact output (default False)
+  --encoding ENCODING   Specify the input encoding (default utf-8)
 ";
 
 /// Flags upstream has but this port does not implement yet.
@@ -65,37 +82,89 @@ fn error(message: &str) -> u8 {
 }
 
 /// argparse-style refusal: usage line plus `error:` line, exit code 2.
+/// Upstream passes `prog='sqlformat'` to ArgumentParser, so the name is fixed
+/// no matter what the binary is called; a byte comparison therefore needs no
+/// rename, unlike xlsx2csv's argparse.
 fn usage_error(message: &str) -> u8 {
-    eprintln!("usage: sqlformat-rs [OPTIONS] FILE [FILE ...]");
-    eprintln!("sqlformat-rs: error: {message}");
+    eprintln!("usage: sqlformat [OPTIONS] FILE [FILE ...]");
+    eprintln!("sqlformat: error: {message}");
     2
 }
 
-fn case_flag(flag: &str) -> &'static str {
+/// argparse's `argument <label>: ...` label for an option that takes a value.
+fn option_label(flag: &str) -> &'static str {
     match flag {
         "-k" | "--keywords" => "-k/--keywords",
-        _ => "-i/--identifiers",
+        "-i" | "--identifiers" => "-i/--identifiers",
+        "-o" | "--outfile" => "-o/--outfile",
+        "--indent_width" => "--indent_width",
+        "--wrap_after" => "--wrap_after",
+        "--comma_first" => "--comma_first",
+        _ => "--compact",
     }
 }
 
-fn case_value(flag: &str, value: &str) -> Result<String, u8> {
+fn case_value(label: &str, value: &str) -> Result<String, u8> {
     match value {
         "upper" | "lower" | "capitalize" => Ok(value.to_string()),
         other => Err(usage_error(&format!(
-            "argument {}: invalid choice: '{other}' (choose from 'upper', 'lower', 'capitalize')",
-            case_flag(flag)
+            "argument {label}: invalid choice: '{other}' (choose from 'upper', 'lower', 'capitalize')"
         ))),
     }
 }
 
+/// argparse accepts `--outfile=X` and the attached short forms `-kX` / `-k=X`,
+/// so expand them into two tokens before the match below. Unknown options keep
+/// their original spelling: argparse echoes them back whole.
+fn expand(args: Vec<String>) -> Vec<String> {
+    const VALUE_OPTS: [&str; 8] = [
+        "--outfile",
+        "--keywords",
+        "--identifiers",
+        "--indent_width",
+        "--wrap_after",
+        "--comma_first",
+        "--compact",
+        "--encoding",
+    ];
+    let mut out = Vec::with_capacity(args.len());
+    for arg in args {
+        if let Some(rest) = arg.strip_prefix("--") {
+            if let Some((name, value)) = rest.split_once('=') {
+                let long = format!("--{name}");
+                if VALUE_OPTS.contains(&long.as_str()) {
+                    out.push(long);
+                    out.push(value.to_string());
+                    continue;
+                }
+            }
+            out.push(arg);
+            continue;
+        }
+        if arg.starts_with('-') && arg.len() > 2 {
+            let flag = arg.as_bytes()[1] as char;
+            if matches!(flag, 'k' | 'i' | 'o') {
+                let rest = &arg[2..];
+                let value = rest.strip_prefix('=').unwrap_or(rest);
+                out.push(format!("-{flag}"));
+                out.push(value.to_string());
+                continue;
+            }
+        }
+        out.push(arg);
+    }
+    out
+}
+
 fn run() -> Result<(), u8> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args = expand(std::env::args().skip(1).collect());
     let mut options = FormatOptions::default();
     let mut files: Vec<String> = Vec::new();
     let mut outfile: Option<String> = None;
     let mut in_place = false;
     let mut indent_width: Option<i64> = None;
     let mut wrap_after: Option<i64> = None;
+    let mut unknown: Vec<String> = Vec::new();
 
     let mut index = 0;
     while index < args.len() {
@@ -112,13 +181,17 @@ fn run() -> Result<(), u8> {
             "-r" | "--reindent" => options.reindent = true,
             "--in-place" => in_place = true,
             _ if UNSUPPORTED.contains(&arg.as_str()) => {
-                eprintln!("not implemented: {arg}");
-                return Err(2);
+                return Err(usage_error(&format!(
+                    "option {arg} is not implemented by this port"
+                )));
             }
             "--wrap_after" | "--comma_first" | "--compact" => {
                 index += 1;
                 let value = args.get(index).ok_or_else(|| {
-                    usage_error(&format!("argument {arg}: expected one argument"))
+                    usage_error(&format!(
+                        "argument {}: expected one argument",
+                        option_label(&arg)
+                    ))
                 })?;
                 match arg.as_str() {
                     "--wrap_after" => match value.parse::<i64>() {
@@ -158,13 +231,15 @@ fn run() -> Result<(), u8> {
                 let value = args.get(index).ok_or_else(|| {
                     usage_error(&format!(
                         "argument {}: expected one argument",
-                        case_flag(&arg)
+                        option_label(&arg)
                     ))
                 })?;
                 match arg.as_str() {
-                    "-k" | "--keywords" => options.keyword_case = Some(case_value("-k", value)?),
+                    "-k" | "--keywords" => {
+                        options.keyword_case = Some(case_value(option_label("-k"), value)?)
+                    }
                     "-i" | "--identifiers" => {
-                        options.identifier_case = Some(case_value("-i", value)?)
+                        options.identifier_case = Some(case_value(option_label("-i"), value)?)
                     }
                     "-o" | "--outfile" => outfile = Some(value.clone()),
                     _ => match value.parse::<i64>() {
@@ -188,10 +263,7 @@ fn run() -> Result<(), u8> {
                     }
                 }
             }
-            _ if arg.starts_with('-') && arg != "-" => {
-                eprintln!("not implemented: {arg}");
-                return Err(2);
-            }
+            _ if arg.starts_with('-') && arg != "-" => unknown.push(arg),
             _ => files.push(arg),
         }
         index += 1;
@@ -201,6 +273,13 @@ fn run() -> Result<(), u8> {
         return Err(usage_error(
             "the following arguments are required: filename",
         ));
+    }
+
+    if !unknown.is_empty() {
+        return Err(usage_error(&format!(
+            "unrecognized arguments: {}",
+            unknown.join(" ")
+        )));
     }
 
     // `format()` validates the value, not argparse: a non-positive width is a
@@ -253,21 +332,33 @@ fn process_file(
             .map_err(|err| error(&format!("Failed to read stdin: {err}")))?;
         buffer
     } else {
-        std::fs::read_to_string(filename)
-            .map_err(|err| error(&format!("Failed to read {filename}: {err}")))?
+        std::fs::read_to_string(filename).map_err(|err| {
+            error(&format!(
+                "Failed to read {filename}: {}",
+                io_message(&err, filename)
+            ))
+        })?
     };
 
     let formatted = format_sql(&data, options)
         .map_err(|err| error(&format!("Failed to format {filename}: {err}")))?;
 
     if in_place {
-        std::fs::write(filename, &formatted)
-            .map_err(|err| error(&format!("Failed to open {filename}: {err}")))?;
+        std::fs::write(filename, &formatted).map_err(|err| {
+            error(&format!(
+                "Failed to open {filename}: {}",
+                io_message(&err, filename)
+            ))
+        })?;
         return Ok(());
     }
     if let Some(outfile) = outfile {
-        std::fs::write(outfile, &formatted)
-            .map_err(|err| error(&format!("Failed to open {outfile}: {err}")))?;
+        std::fs::write(outfile, &formatted).map_err(|err| {
+            error(&format!(
+                "Failed to open {outfile}: {}",
+                io_message(&err, outfile)
+            ))
+        })?;
         return Ok(());
     }
 
@@ -276,4 +367,32 @@ fn process_file(
         .write_all(formatted.as_bytes())
         .and_then(|()| stdout.flush())
         .map_err(|err| error(&format!("Failed to write stdout: {err}")))
+}
+
+/// CPython's `str(OSError)` shape, e.g. `[Errno 2] No such file or directory:
+/// 'nope.sql'`. Upstream puts that straight into `[ERROR] Failed to read ...`.
+fn io_message(err: &std::io::Error, path: &str) -> String {
+    match err.raw_os_error() {
+        Some(code) => format!("[Errno {code}] {}: '{path}'", strerror(code)),
+        None => format!("{err}: '{path}'"),
+    }
+}
+
+fn strerror(code: i32) -> &'static str {
+    match code {
+        1 => "Operation not permitted",
+        2 => "No such file or directory",
+        5 => "Input/output error",
+        12 => "Cannot allocate memory",
+        13 => "Permission denied",
+        17 => "File exists",
+        20 => "Not a directory",
+        21 => "Is a directory",
+        24 => "Too many open files",
+        28 => "No space left on device",
+        30 => "Read-only file system",
+        36 => "File name too long",
+        40 => "Too many levels of symbolic links",
+        _ => "Unknown error",
+    }
 }

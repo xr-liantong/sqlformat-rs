@@ -5,8 +5,10 @@ Scope of v0.2 and every place this port knowingly differs from `sqlparse`
 
 ## Not implemented (exit status 2)
 
-This port prints `not implemented: <flag>` on stderr and exits 2 (a wrong guess
-is worse than a refusal). The list mixes two kinds of upstream surface:
+This port prints `sqlformat: error: option <flag> is not implemented by this
+port` on stderr and exits 2 (a wrong guess is worse than a refusal).
+`tools/cli_matrix.sh` pins each of these as a *known gap*: if one ever starts
+matching upstream, the script fails so this file gets updated.
 
 CLI flags the upstream `sqlformat` binary really accepts:
 
@@ -52,10 +54,16 @@ unaffected; the corpus is pure ASCII.
 
 Runtime failures use upstream's `[ERROR] ...` line and exit 1, including a
 `--indent_width` that parses as an integer but is not positive (upstream
-rejects that in `format()`, not in argparse, and so do we). Option errors
-use argparse-shaped text (`usage: sqlformat-rs [OPTIONS] FILE [FILE ...]` plus
-`sqlformat-rs: error: argument -k/--keywords: invalid choice: ...`) and exit 2,
-like upstream; the wording after `error:` is ours, not byte-identical.
+rejects that in `format()`, not in argparse, and so do we). Option errors use
+argparse-shaped text and exit 2, byte-identical to upstream — `usage: sqlformat
+[OPTIONS] FILE [FILE ...]`, `sqlformat: error: argument -k/--keywords: invalid
+choice: 'bogus' (choose from 'upper', 'lower', 'capitalize')`, `unrecognized
+arguments: --bogus --x2`, and `argument -o/--outfile: expected one argument`.
+Upstream passes `prog='sqlformat'` to ArgumentParser, so that name is fixed and
+a byte comparison needs no binary rename (unlike xlsx2csv's argparse). `I/O`
+failures copy CPython's `str(OSError)`: `[Errno 2] No such file or directory:
+'nope.sql'`. `tests/cli.rs` pins the same bytes without needing Python;
+`tools/cli_matrix.sh` compares 26 invocations against a live upstream.
 
 ## CI
 

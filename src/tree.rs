@@ -443,6 +443,13 @@ impl Tree {
         let existing = self.nodes[parent].children[start];
         if extend && self.extends_class(class, existing) {
             let taken: Vec<Id> = self.nodes[parent].children.drain(start + 1..=end).collect();
+            // Python extends the cached value too (`grp.value += ...`), and the
+            // reindent filter measures tokens with that cached length.
+            let grown: usize = taken
+                .iter()
+                .map(|child| self.nodes[*child].cached_len)
+                .sum();
+            self.nodes[existing].cached_len += grown;
             for child in &taken {
                 self.nodes[*child].parent = Some(existing);
             }
