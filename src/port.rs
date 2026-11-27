@@ -22,6 +22,8 @@ pub struct FormatOptions {
     pub comma_first: bool,
     /// `--compact`: skip the line breaks `CASE` would otherwise get.
     pub compact: bool,
+    /// `--strip-comments`: drop comments, keeping their trailing line breaks.
+    pub strip_comments: bool,
 }
 
 impl Default for FormatOptions {
@@ -34,6 +36,7 @@ impl Default for FormatOptions {
             wrap_after: 0,
             comma_first: false,
             compact: false,
+            strip_comments: false,
         }
     }
 }
@@ -100,6 +103,76 @@ pub fn format_sql(sql: &str, options: &FormatOptions) -> Result<String, PortErro
     Ok(out)
 }
 
+/// `StripCommentsFilter._get_insert_token`: the comment's trailing run of
+/// `\r`/`\n` characters (`re.search(r'([\r\n]+) *$', value)`), else one space.
+fn comment_placeholder(comment: &str) -> String {
+    let body = comment.trim_end_matches(' ');
+    let mut start = body.len();
+    for (index, ch) in body.char_indices().rev() {
+        if ch == '\r' || ch == '\n' {
+            start = index;
+        } else {
+            break;
+        }
+    }
+    if start < body.len() {
+        body[start..].to_string()
+    } else {
+        " ".to_string()
+    }
+}
+
+/// Drop comment tokens the way `StripCommentsFilter` does, before grouping.
+///
+/// Comments are grouped first, exactly like `sqlparse.engine.grouping.
+/// group_comments`: a comment absorbs the newline-only whitespace (and any
+/// further comment) that follows it, so the line breaks of a removed comment
+/// go with it. A group is dropped outright when nothing precedes it or the
+/// previous token is `(`; otherwise it becomes one whitespace token
+/// (`comment_placeholder`). SQL hints (`/*+ … */`, `--+ …`) are kept.
+fn strip_comments(tokens: Vec<Token>) -> Vec<Token> {
+    let is_hint = |ttype: Tk| matches!(ttype, Tk::CommentSingleHint | Tk::CommentMultilineHint);
+    let is_newline = |token: &Token| {
+        token.ttype == Tk::Newline
+            && !token.value.is_empty()
+            && token.value.chars().all(|c| c == '\r' || c == '\n')
+    };
+    let mut out: Vec<Token> = Vec::with_capacity(tokens.len());
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = &tokens[index];
+        if !token.ttype.is_comment() || is_hint(token.ttype) {
+            out.push(tokens[index].clone());
+            index += 1;
+            continue;
+        }
+        let mut end = index;
+        let mut text = String::new();
+        while end < tokens.len() {
+            let current = &tokens[end];
+            if !current.ttype.is_comment() && !is_newline(current) {
+                break;
+            }
+            text.push_str(&current.value);
+            end += 1;
+        }
+        if !is_hint(token.ttype) {
+            let keep_placeholder = match out.last() {
+                None => false,
+                Some(previous) => previous.value != "(",
+            };
+            if keep_placeholder {
+                out.push(Token {
+                    ttype: Tk::Whitespace,
+                    value: comment_placeholder(&text),
+                });
+            }
+        }
+        index = end;
+    }
+    out
+}
+
 fn emit(
     tokens: Vec<Token>,
     options: &FormatOptions,
@@ -107,6 +180,11 @@ fn emit(
     reindent: &mut ReindentFilter,
     out: &mut String,
 ) -> Result<(), PortError> {
+    let tokens = if options.strip_comments {
+        strip_comments(tokens)
+    } else {
+        tokens
+    };
     let mut tree = Tree::from_tokens(tokens);
     let root = tree.root;
     if options.reindent {

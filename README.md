@@ -22,6 +22,7 @@ Implemented flags:
 | `--wrap_after N` | re-wrap lists after N columns (`int`; a negative value is a runtime error like upstream) |
 | `--comma_first true` | break *before* the comma (`type=bool`: any non-empty value, even `false`, turns it on) |
 | `--compact true` | no line break before `END` in `CASE` (`type=bool`, same rule) |
+| `--strip-comments` | drop comments; SQL hints (`/*+ … */`, `--+ …`) are kept |
 | `-o`, `--outfile FILE` | write to a file instead of stdout |
 | `--in-place` | rewrite the input files |
 | `-h`, `--help`, `--version` | help / upstream version string `0.6.1` |
@@ -32,12 +33,18 @@ exit 2) and the `[ERROR] …` lines are byte-identical to upstream — including
 the fixed `prog='sqlformat'`, the `[Errno N] strerror: 'path'` shape, and the
 attached-value forms `-k=upper` / `-kupper` / `--keywords=upper`.
 `tools/cli_matrix.sh` compares 26 such invocations against a live upstream and
-pins 7 flags as *known gaps* (a gap that starts matching fails the script).
+pins 6 flags as *known gaps* (a gap that starts matching fails the script).
 
-Every other upstream flag (`-a`, `-s`, `-l`, `--strip-comments`,
-`--indent_after_first`, `--indent_columns`, `--encoding`) exits with status
-**2** and prints `sqlformat: error: option <flag> is not implemented by this
-port`. See [KNOWN-GAPS.md](KNOWN-GAPS.md).
+argparse's long-option prefixes work as upstream does: `--indent_w 4` means
+`--indent_width 4`, and an ambiguous prefix fails the same way, listing the
+candidates in definition order (`ambiguous option: --i could match --in-place,
+--identifiers, --indent_width, --indent_after_first, --indent_columns`). A
+filename does not have to be UTF-8; it is passed through as bytes.
+
+Every other upstream flag (`-a`, `-s`, `-l`, `--indent_after_first`,
+`--indent_columns`, `--encoding`) exits with status **2** and prints
+`sqlformat: error: option <flag> is not implemented by this port`. See
+[KNOWN-GAPS.md](KNOWN-GAPS.md).
 
 ### Limits
 

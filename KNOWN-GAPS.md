@@ -15,14 +15,13 @@ CLI flags the upstream `sqlformat` binary really accepts:
 - `-a`, `--reindent_aligned` — needs `AlignedIndentFilter`
 - `-s`, `--use_space_around_operators`
 - `-l`, `--language`
-- `--strip-comments`
 - `--indent_after_first`, `--indent_columns`
 - `--encoding`
 
 Keyword arguments of `sqlparse.format()` that the upstream CLI never accepted
 (`--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
-`--output_format` are rejected there as `unrecognized arguments`, exit 2; we
-also exit 2, with a different message):
+`--output_format` are rejected there as `unrecognized arguments`, exit 2; since
+v0.2 we print the same `unrecognized arguments: <flag>` line):
 
 - `--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
   `--output_format`
@@ -34,6 +33,18 @@ validation quirks are reproduced too: `--wrap_after -3` is a runtime error
 (exit 1, `Invalid options: wrap_after requires a positive integer`) while
 `--comma_first` without a value is a usage error (exit 2), and any non-empty
 string — even `false` — enables it. `-a` still needs `AlignedIndentFilter`.
+
+## Fixed in v0.2
+
+- `-r --wrap_after N` wraps at the same columns as upstream
+  (`sqlf03-cte.sql` 708/651 B, `sqlf11-unicode.sql` 235 B): grouping now grows
+  a reused group's cached value, as Python's `grp.value += …` does (#5).
+- A non-UTF-8 filename no longer panics: argv is read with `args_os`, so the
+  path stays bytes (`[ERROR]` lines show it lossily) (#6).
+- Long options accept unambiguous prefixes and report ambiguity in argparse
+  order; options upstream never accepted are `unrecognized arguments`, not
+  "not implemented" (#7).
+- `--strip-comments` is implemented, hints excepted.
 
 ## Python API not exposed
 

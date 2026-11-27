@@ -73,8 +73,10 @@ check keywords-lower golden-klower.sql -k lower
 check identifiers-upper golden-iupper.sql -i upper
 check indent-width-4 golden-iw4.sql --indent_width 4
 
-# v0.2 reindent options, compared on a list/CASE heavy fixture.
-check_in wrap_after-20 golden-wrap20.sql fixtures/lists.sql -r --wrap_after 20
+check_in strip-comments golden-strip.sql fixtures/comments.sql --strip-comments
+check_in strip-comments-reindent golden-strip-r.sql fixtures/comments.sql --strip-comments -r
+
+# v0.2 reindent options, compared on a list/CASE heavy fixture.check_in wrap_after-20 golden-wrap20.sql fixtures/lists.sql -r --wrap_after 20
 check_in comma_first golden-comma.sql fixtures/lists.sql -r --comma_first true
 check_in comma_first-wrap_after-30 golden-comma-w30.sql fixtures/lists.sql -r --comma_first true --wrap_after 30
 check_in compact golden-compact.sql fixtures/lists.sql -r --compact true

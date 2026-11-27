@@ -311,6 +311,86 @@ fn corpus_matches_upstream_checksum() {
     assert_eq!(got, expected, "corpus output checksum");
 }
 
+#[test]
+fn ambiguous_long_option_matches_argparse() {
+    // argparse lists every candidate in definition order, not alphabetically.
+    let out = Command::new(binary()).arg("--i").output().expect("run");
+    assert_eq!(out.status.code(), Some(2));
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr),
+        "usage: sqlformat [OPTIONS] FILE [FILE ...]\n\
+         sqlformat: error: ambiguous option: --i could match --in-place, \
+         --identifiers, --indent_width, --indent_after_first, --indent_columns\n"
+    );
+}
+
+#[test]
+fn unknown_options_are_unrecognized_not_unimplemented() {
+    // `--indent_tabs` is a `format()` kwarg upstream never exposed on the CLI,
+    // so argparse reports it as unrecognized rather than this port refusing it.
+    for flag in ["--indent_tabs", "--unknown-flag"] {
+        let out = Command::new(binary())
+            .arg(flag)
+            .arg(fixtures().join("kwcase.sql"))
+            .output()
+            .expect("run");
+        assert_eq!(out.status.code(), Some(2), "{flag} exit code");
+        assert_eq!(
+            String::from_utf8_lossy(&out.stderr),
+            format!(
+                "usage: sqlformat [OPTIONS] FILE [FILE ...]\n\
+                 sqlformat: error: unrecognized arguments: {flag}\n"
+            )
+        );
+    }
+}
+
+#[test]
+fn abbreviated_long_options_resolve_to_the_full_option() {
+    let fixture = fixtures().join("kwcase.sql");
+    let path = fixture.to_str().expect("utf-8");
+    // `--re`/`--reind` stay ambiguous upstream too: `--reindent` is a prefix of
+    // `--reindent_aligned`, so only genuinely unique prefixes are abbreviated.
+    let narrow = run(&["--indent_w", "4", "-r", path]);
+    let full = run(&["--indent_width", "4", "--reindent", path]);
+    assert_eq!(narrow, full, "--indent_w must mean --indent_width");
+    let stripped = run(&["--stri", path]);
+    let spelled = run(&["--strip-comments", path]);
+    assert_eq!(stripped, spelled, "--stri must mean --strip-comments");
+}
+
+#[test]
+fn strip_comments_matches_upstream() {
+    assert_golden_input(&["--strip"], "golden-strip.sql", "comments.sql");
+    assert_golden_input(
+        &["-r", "--strip-comments"],
+        "golden-strip-r.sql",
+        "comments.sql",
+    );
+}
+
+#[cfg(unix)]
+#[test]
+fn non_utf8_filename_is_a_filename_not_a_crash() {
+    use std::ffi::OsString;
+    use std::os::unix::ffi::OsStringExt;
+
+    let dir = std::env::temp_dir().join(format!("sqlformat-rs-nonutf8-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let path = dir.join(OsString::from_vec(b"bad\xff.sql".to_vec()));
+    std::fs::write(&path, b"select 1;\n").expect("write input");
+
+    let out = Command::new(binary()).arg(&path).output().expect("run");
+    let _ = std::fs::remove_dir_all(&dir);
+    assert_eq!(
+        out.status.code(),
+        Some(0),
+        "stderr: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(out.stdout, b"select 1;");
+}
+
 /// Minimal SHA-256, so the test suite needs no extra dependency.
 fn sha256_hex_prefix(data: &[u8], hex_chars: usize) -> String {
     const K: [u32; 64] = [

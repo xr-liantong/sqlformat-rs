@@ -1,6 +1,7 @@
 //! `sqlformat` CLI: the flag subset this port implements, byte-compatible
 //! output, and upstream's exit codes (`0` ok, `1` error, `2` usage).
 
+use std::ffi::{OsStr, OsString};
 use std::io::{Read, Write};
 use std::process::ExitCode;
 
@@ -51,22 +52,18 @@ Formatting Options:
 ";
 
 /// Flags upstream has but this port does not implement yet.
-const UNSUPPORTED: [&str; 15] = [
+const UNSUPPORTED: [&str; 11] = [
     "-a",
     "--reindent_aligned",
     "-s",
     "--use_space_around_operators",
     "-l",
     "--language",
-    "--strip-comments",
     "--indent_after_first",
     "--indent_columns",
-    "--indent_tabs",
-    "--encoding",
     "--right_margin",
     "--truncate_strings",
     "--truncate_char",
-    "--output_format",
 ];
 
 fn main() -> ExitCode {
@@ -100,6 +97,7 @@ fn option_label(flag: &str) -> &'static str {
         "--indent_width" => "--indent_width",
         "--wrap_after" => "--wrap_after",
         "--comma_first" => "--comma_first",
+        "--encoding" => "--encoding",
         _ => "--compact",
     }
 }
@@ -113,62 +111,155 @@ fn case_value(label: &str, value: &str) -> Result<String, u8> {
     }
 }
 
-/// argparse accepts `--outfile=X` and the attached short forms `-kX` / `-k=X`,
-/// so expand them into two tokens before the match below. Unknown options keep
-/// their original spelling: argparse echoes them back whole.
-fn expand(args: Vec<String>) -> Vec<String> {
-    const VALUE_OPTS: [&str; 8] = [
-        "--outfile",
-        "--keywords",
-        "--identifiers",
-        "--indent_width",
-        "--wrap_after",
-        "--comma_first",
-        "--compact",
-        "--encoding",
-    ];
+/// Long options in argparse definition order. `ambiguous option: --i could
+/// match ...` lists the candidates in this order, so this is a list, not a set.
+const LONGS: [&str; 18] = [
+    "--help",
+    "--outfile",
+    "--in-place",
+    "--version",
+    "--keywords",
+    "--identifiers",
+    "--language",
+    "--strip-comments",
+    "--reindent",
+    "--indent_width",
+    "--indent_after_first",
+    "--indent_columns",
+    "--reindent_aligned",
+    "--use_space_around_operators",
+    "--wrap_after",
+    "--comma_first",
+    "--compact",
+    "--encoding",
+];
+
+/// Long options that consume the next token, or an `=value` suffix.
+const TAKES_VALUE: [&str; 8] = [
+    "--outfile",
+    "--keywords",
+    "--identifiers",
+    "--indent_width",
+    "--wrap_after",
+    "--comma_first",
+    "--compact",
+    "--encoding",
+];
+
+/// argparse lets any long option be shortened to an unambiguous prefix; a
+/// prefix that matches several is an error listing all of them.
+fn resolve_long(given: &str) -> Result<Option<&'static str>, u8> {
+    if let Some(hit) = LONGS.iter().find(|long| **long == given) {
+        return Ok(Some(hit));
+    }
+    let matches: Vec<&'static str> = LONGS
+        .iter()
+        .copied()
+        .filter(|long| long.starts_with(given))
+        .collect();
+    match matches.len() {
+        0 => Ok(None),
+        1 => Ok(Some(matches[0])),
+        _ => Err(usage_error(&format!(
+            "ambiguous option: {given} could match {}",
+            matches.join(", ")
+        ))),
+    }
+}
+
+/// argparse accepts `--outfile=X`, the attached short forms `-kX` / `-k=X`,
+/// and abbreviated long options, so all three are rewritten here into plain
+/// tokens before the match in `run`. Unknown options keep their spelling:
+/// argparse echoes them back whole in `unrecognized arguments`.
+fn expand(args: Vec<OsString>) -> Result<Vec<OsString>, u8> {
     let mut out = Vec::with_capacity(args.len());
-    for arg in args {
-        if let Some(rest) = arg.strip_prefix("--") {
-            if let Some((name, value)) = rest.split_once('=') {
-                let long = format!("--{name}");
-                if VALUE_OPTS.contains(&long.as_str()) {
-                    out.push(long);
-                    out.push(value.to_string());
-                    continue;
-                }
-            }
+    let mut index = 0;
+    while index < args.len() {
+        let arg = args[index].clone();
+        index += 1;
+        // A non-UTF-8 argument cannot be an option, so it is a filename.
+        let Some(text) = arg.to_str() else {
             out.push(arg);
             continue;
+        };
+        if text == "--" {
+            // End of options: everything after it is a filename.
+            out.extend(args[index..].iter().cloned());
+            break;
         }
-        if arg.starts_with('-') && arg.len() > 2 {
-            let flag = arg.as_bytes()[1] as char;
+        if let Some(rest) = text.strip_prefix("--") {
+            let (name, inline) = match rest.split_once('=') {
+                Some((name, value)) => (format!("--{name}"), Some(value.to_string())),
+                None => (format!("--{rest}"), None),
+            };
+            match resolve_long(&name)? {
+                Some(long) if TAKES_VALUE.contains(&long) => {
+                    out.push(OsString::from(long));
+                    if let Some(value) = inline {
+                        out.push(OsString::from(value));
+                    }
+                }
+                // A flag does not take a value: `--in-place=1` stays one token.
+                Some(long) if inline.is_none() => out.push(OsString::from(long)),
+                _ => out.push(OsString::from(text)),
+            }
+            continue;
+        }
+        if text.starts_with('-') && text.len() > 2 {
+            let flag = text.as_bytes()[1] as char;
             if matches!(flag, 'k' | 'i' | 'o') {
-                let rest = &arg[2..];
+                let rest = &text[2..];
                 let value = rest.strip_prefix('=').unwrap_or(rest);
-                out.push(format!("-{flag}"));
-                out.push(value.to_string());
+                out.push(OsString::from(format!("-{flag}")));
+                out.push(OsString::from(value));
                 continue;
             }
         }
-        out.push(arg);
+        out.push(OsString::from(text));
     }
-    out
+    Ok(out)
+}
+
+fn take_value(args: &[OsString], index: &mut usize, label: &str) -> Result<OsString, u8> {
+    let value = args
+        .get(*index)
+        .ok_or_else(|| usage_error(&format!("argument {label}: expected one argument")))?;
+    *index += 1;
+    Ok(value.clone())
+}
+
+/// Case choices and widths must be UTF-8; only filenames may be arbitrary
+/// bytes, which is why those keep their `OsString`.
+fn text_value(value: &OsStr, label: &str) -> Result<String, u8> {
+    match value.to_str() {
+        Some(text) => Ok(text.to_owned()),
+        None => Err(usage_error(&format!(
+            "argument {label}: invalid value: {value:?}"
+        ))),
+    }
 }
 
 fn run() -> Result<(), u8> {
-    let args = expand(std::env::args().skip(1).collect());
+    // `args_os`: a filename is bytes on every platform upstream supports, and
+    // `std::env::args()` panics on a non-UTF-8 argv entry (#6).
+    let args = expand(std::env::args_os().skip(1).collect())?;
     let mut options = FormatOptions::default();
-    let mut files: Vec<String> = Vec::new();
-    let mut outfile: Option<String> = None;
+    let mut files: Vec<OsString> = Vec::new();
+    let mut outfile: Option<OsString> = None;
     let mut in_place = false;
     let mut indent_width: Option<i64> = None;
     let mut wrap_after: Option<i64> = None;
     let mut unknown: Vec<String> = Vec::new();
+    let mut codec: Option<String> = None;
 
     let mut index = 0;
     while index < args.len() {
-        let arg = args[index].clone();
+        let raw = args[index].clone();
+        index += 1;
+        let Some(arg) = raw.to_str().map(str::to_owned) else {
+            files.push(raw);
+            continue;
+        };
         match arg.as_str() {
             "-h" | "--help" => {
                 print!("{USAGE}");
@@ -180,19 +271,16 @@ fn run() -> Result<(), u8> {
             }
             "-r" | "--reindent" => options.reindent = true,
             "--in-place" => in_place = true,
+            "--strip-comments" => options.strip_comments = true,
             _ if UNSUPPORTED.contains(&arg.as_str()) => {
                 return Err(usage_error(&format!(
                     "option {arg} is not implemented by this port"
                 )));
             }
             "--wrap_after" | "--comma_first" | "--compact" => {
-                index += 1;
-                let value = args.get(index).ok_or_else(|| {
-                    usage_error(&format!(
-                        "argument {}: expected one argument",
-                        option_label(&arg)
-                    ))
-                })?;
+                let label = option_label(&arg);
+                let value = take_value(&args, &mut index, label)?;
+                let value = text_value(&value, label)?;
                 match arg.as_str() {
                     "--wrap_after" => match value.parse::<i64>() {
                         Ok(width) => wrap_after = Some(width),
@@ -208,65 +296,37 @@ fn run() -> Result<(), u8> {
                     _ => options.compact = !value.is_empty(),
                 }
             }
-            _ if arg.starts_with("--wrap_after=") => {
-                let value = &arg["--wrap_after=".len()..];
-                match value.parse::<i64>() {
-                    Ok(width) => wrap_after = Some(width),
-                    Err(_) => {
-                        return Err(usage_error(&format!(
-                            "argument --wrap_after: invalid int value: '{value}'"
-                        )))
-                    }
-                }
-            }
-            _ if arg.starts_with("--comma_first=") => {
-                options.comma_first = !arg["--comma_first=".len()..].is_empty();
-            }
-            _ if arg.starts_with("--compact=") => {
-                options.compact = !arg["--compact=".len()..].is_empty();
+            "--encoding" => {
+                let value = take_value(&args, &mut index, "--encoding")?;
+                codec = Some(text_value(&value, "--encoding")?);
             }
             "-k" | "--keywords" | "-i" | "--identifiers" | "-o" | "--outfile"
             | "--indent_width" => {
-                index += 1;
-                let value = args.get(index).ok_or_else(|| {
-                    usage_error(&format!(
-                        "argument {}: expected one argument",
-                        option_label(&arg)
-                    ))
-                })?;
+                let label = option_label(&arg);
+                let value = take_value(&args, &mut index, label)?;
                 match arg.as_str() {
                     "-k" | "--keywords" => {
-                        options.keyword_case = Some(case_value(option_label("-k"), value)?)
+                        options.keyword_case = Some(case_value(label, &text_value(&value, label)?)?)
                     }
                     "-i" | "--identifiers" => {
-                        options.identifier_case = Some(case_value(option_label("-i"), value)?)
+                        options.identifier_case =
+                            Some(case_value(label, &text_value(&value, label)?)?)
                     }
-                    "-o" | "--outfile" => outfile = Some(value.clone()),
-                    _ => match value.parse::<i64>() {
+                    "-o" | "--outfile" => outfile = Some(value),
+                    _ => match text_value(&value, label)?.parse::<i64>() {
                         Ok(width) => indent_width = Some(width),
                         Err(_) => {
                             return Err(usage_error(&format!(
-                                "argument --indent_width: invalid int value: '{value}'"
+                                "argument --indent_width: invalid int value: '{}'",
+                                text_value(&value, label)?
                             )))
                         }
                     },
                 }
             }
-            _ if arg.starts_with("--indent_width=") => {
-                let value = &arg["--indent_width=".len()..];
-                match value.parse::<i64>() {
-                    Ok(width) => indent_width = Some(width),
-                    Err(_) => {
-                        return Err(usage_error(&format!(
-                            "argument --indent_width: invalid int value: '{value}'"
-                        )))
-                    }
-                }
-            }
             _ if arg.starts_with('-') && arg != "-" => unknown.push(arg),
-            _ => files.push(arg),
+            _ => files.push(OsString::from(arg)),
         }
-        index += 1;
     }
 
     if files.is_empty() {
@@ -309,54 +369,122 @@ fn run() -> Result<(), u8> {
         }
     }
 
+    // `open(..., encoding=NAME)` looks the codec up at read time, after
+    // argparse has validated everything else.
+    let codec = match codec.as_deref() {
+        None => sqlformat_rs::encoding::Codec::Utf8,
+        Some(name) => match sqlformat_rs::encoding::Codec::parse(name) {
+            Some(codec) => codec,
+            None => {
+                eprintln!("LookupError: unknown encoding: {name}");
+                return Err(1);
+            }
+        },
+    };
+
     for filename in &files {
-        process_file(filename, &options, outfile.as_deref(), in_place)?;
+        process_file(filename, &options, outfile.as_deref(), in_place, codec)?;
     }
     Ok(())
 }
 
 fn process_file(
-    filename: &str,
+    filename: &OsStr,
     options: &FormatOptions,
-    outfile: Option<&str>,
+    outfile: Option<&OsStr>,
     in_place: bool,
+    codec: sqlformat_rs::encoding::Codec,
 ) -> Result<(), u8> {
-    if filename == "-" && in_place {
+    let shown = filename.to_string_lossy();
+    let shown_out = outfile.map(|path| path.to_string_lossy());
+
+    if filename == OsStr::new("-") && in_place {
         return Err(error("Cannot use --in-place with stdin"));
     }
 
-    let data = if filename == "-" {
-        let mut buffer = String::new();
+    let data = if filename == OsStr::new("-") {
+        let mut buffer = Vec::new();
         std::io::stdin()
-            .read_to_string(&mut buffer)
+            .read_to_end(&mut buffer)
             .map_err(|err| error(&format!("Failed to read stdin: {err}")))?;
-        buffer
+        codec.decode(&buffer).map_err(|message| {
+            eprintln!("{message}");
+            1
+        })?
     } else {
-        std::fs::read_to_string(filename).map_err(|err| {
+        let bytes = std::fs::read(filename).map_err(|err| {
             error(&format!(
-                "Failed to read {filename}: {}",
-                io_message(&err, filename)
+                "Failed to read {shown}: {}",
+                io_message(&err, &shown)
             ))
+        })?;
+        // A decode failure is a traceback upstream: the message goes out
+        // without the `[ERROR] ` prefix, and nothing is written.
+        codec.decode(&bytes).map_err(|message| {
+            eprintln!("{message}");
+            1
         })?
     };
 
     let formatted = format_sql(&data, options)
-        .map_err(|err| error(&format!("Failed to format {filename}: {err}")))?;
+        .map_err(|err| error(&format!("Failed to format {shown}: {err}")))?;
 
     if in_place {
-        std::fs::write(filename, &formatted).map_err(|err| {
+        write_encoded(filename, &formatted, codec, &shown)?;
+        return Ok(());
+    }
+    if let (Some(outfile), Some(shown_out)) = (outfile, shown_out) {
+        write_encoded(outfile, &formatted, codec, &shown_out)?;
+        return Ok(());
+    }
+
+    let mut stdout = std::io::stdout();
+    stdout
+        .write_all(formatted.as_bytes())
+        .and_then(|()| stdout.flush())
+        .map_err(|err| error(&format!("Failed to write stdout: {err}")))
+}
+
+/// Write `text` with `codec`, mirroring `open(outfile, 'w', encoding=...)`:
+/// the file is created (and truncated) before the first character is encoded,
+/// so an unencodable character leaves the bytes written so far behind.
+fn write_encoded(
+    path: &OsStr,
+    text: &str,
+    codec: sqlformat_rs::encoding::Codec,
+    shown: &str,
+) -> Result<(), u8> {
+    let encoded = match codec.encode(text) {
+        Ok(bytes) => bytes,
+        Err((partial, message)) => {
+            let _ = std::fs::write(path, &partial);
+            eprintln!("{message}");
+            return Err(1);
+        }
+    };
+    std::fs::write(path, encoded).map_err(|err| {
+        error(&format!(
+            "Failed to open {shown}: {}",
+            io_message(&err, shown)
+        ))
+    })
+}
+
+#[allow(dead_code)]
+fn unused_placeholder() {
+    {
             error(&format!(
-                "Failed to open {filename}: {}",
-                io_message(&err, filename)
+                "Failed to open {shown}: {}",
+                io_message(&err, &shown)
             ))
         })?;
         return Ok(());
     }
-    if let Some(outfile) = outfile {
+    if let (Some(outfile), Some(shown_out)) = (outfile, shown_out) {
         std::fs::write(outfile, &formatted).map_err(|err| {
             error(&format!(
-                "Failed to open {outfile}: {}",
-                io_message(&err, outfile)
+                "Failed to open {shown_out}: {}",
+                io_message(&err, &shown_out)
             ))
         })?;
         return Ok(());
