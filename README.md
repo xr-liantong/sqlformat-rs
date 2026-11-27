@@ -138,14 +138,24 @@ PASS test       cargo test --release
 PASS parity     tools/parity.sh            byte parity against the goldens
 PASS keywords   tools/check_keywords.py    803 keys, merge order, shadowing
 PASS tokens     tools/check_tokens.sh      token stream vs sqlparse, token by token
-gates: 6 passed, 0 failed
+PASS reverse test: ...                     four checks that the gate goes red
+gates: 10 passed, 0 failed
 ```
+
+`tools/parity.sh` fixes the number of cases (`EXPECTED_CASES`) and counts the
+ones it handles; a case that quietly stops running, a corrupted golden, a
+missing fixture or a tampered total each turn the gate red. The four reverse
+tests in `tools/gates.sh` prove exactly that. The two Python cross-checks need
+sqlparse: run `tools/setup_venv.sh` once (it reuses a user-installed sqlparse,
+and a missing dependency fails the gate rather than skipping it).
 
 **There is no CI.** The token that pushes this repository has no `workflow`
 scope, so GitHub rejects any commit that adds `.github/workflows/`; no badge
 exists and none should be assumed. The gate is two steps: `tools/gates.sh` on
-the build box, then the same script again from a clean clone (`git clone` →
-`cargo build --release` → `tools/gates.sh`).
+the build box, then the same script again from a clean clone (`git clone` → `tools/setup_venv.sh`
+→ `tools/gates.sh`). A release tag may only be put on a commit that has passed
+that second run: v0.2.0 was tagged on a tree that did not compile, which is
+why the rule exists (issue #11).
 The script exits non-zero if any gate fails and prints that gate's output. Its
 failure path is itself checked: appending a badly formatted function makes it
 report `FAIL fmt` and exit 1 (verified on 2026-11-19). All six are green on the
