@@ -24,6 +24,14 @@ v0.2 we print the same `unrecognized arguments: <flag>` line):
 - `--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
   `--output_format`
 
+`--indent_columns` and `--indent_after_first` landed with the `-s` round:
+`indent_columns` forces `reindent` (which forces `strip_whitespace`) exactly as
+`validate_options` does, `indent_after_first` only shifts the leading
+whitespace of the continuation lines, and the identifier list keeps its first
+identifier in the list (`first = next(identifiers[0].flatten())`) instead of
+popping it. Corpus `-r --indent_after_first` = 3,978,883 B and
+`--indent_columns` = 3,318,891 B, both byte-identical to upstream.
+
 `-s/--use_space_around_operators` landed with the `-s` round: a space goes on
 each side of every `Operator`/`Comparison` token, and a `*` (Wildcard) is
 promoted to an operator exactly when `group_operator` would promote it — both
