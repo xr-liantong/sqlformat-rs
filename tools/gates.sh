@@ -34,7 +34,16 @@ run() {
 run "fmt"      cargo fmt --check
 run "clippy"   cargo clippy --release --all-targets -- -D warnings
 run "test"     cargo test --release
-run "parity"   tools/parity.sh
+parity_green=0
+if tools/parity.sh >/tmp/gate.out 2>&1; then
+    echo "PASS parity"
+    pass=$((pass + 1))
+    parity_green=1
+else
+    echo "FAIL parity"
+    tail -15 /tmp/gate.out | sed 's/^/     /'
+    fail=$((fail + 1))
+fi
 # The two Python cross-checks need sqlparse. A missing dependency is a
 # failure, not a skip: a gate that cannot run must not look green.
 if .venv/bin/python -c 'import sqlparse' >/dev/null 2>&1; then
@@ -67,6 +76,16 @@ expect_red() {
     echo "PASS reverse test: $label"
     pass=$((pass + 1))
 }
+
+# The reverse tests exist to prove the gate can go red for the right reason, so
+# they only mean anything while the gate is green: with a missing binary every
+# case fails, and "FAIL reindent" then appears for the wrong reason (#10).
+if [ "$parity_green" -ne 1 ]; then
+    echo "FAIL reverse tests -- parity is not green, so they would prove nothing"
+    fail=$((fail + 1))
+    echo "gates: $pass passed, $fail failed"
+    exit 1
+fi
 
 # 1. A case that is quietly dropped must fall foul of the fixed total.
 sed 's/^check default golden-default.sql$/# &/' tools/parity.sh > tools/parity-dropped.sh
