@@ -22,6 +22,15 @@ fail=0
 # out used to leave the gate green, so the total is checked at the end too.
 EXPECTED_CASES=31
 
+# Cross-check the hard-coded total against the case table itself.  Both ways:
+# a case commented out leaves the table shorter than EXPECTED_CASES, and a
+# total edited down leaves it longer.  Neither can pass silently.
+listed=$(( $(grep -cE '^(check|check_in|check_file_first|check_enc) ' "$0") + 2 ))
+if [ "$listed" -ne "$EXPECTED_CASES" ]; then
+    echo "parity: the case table lists $listed cases, EXPECTED_CASES=$EXPECTED_CASES" >&2
+    exit 2
+fi
+
 check() {
     local name=$1 golden=$2
     shift 2

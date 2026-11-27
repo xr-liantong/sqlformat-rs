@@ -76,7 +76,7 @@ cases=$(sed -n 's/^EXPECTED_CASES=\([0-9]*\)$/\1/p' tools/parity.sh)
 # The keyword names the count a dropped case leaves behind, not just the
 # expected total: with no binary at all parity also reports "expected N", and
 # this test must not pass for that reason (#10).
-expect_red "one case commented out" "$((cases - 1)) cases handled, expected $cases" bash tools/parity-dropped.sh
+expect_red "one case commented out" "lists $((cases - 1)) cases, EXPECTED_CASES=$cases" bash tools/parity-dropped.sh
 
 # 2. A corrupted golden must fail on the bytes.
 cp fixtures/golden-r.sql "$tmp/golden-r.sql"
@@ -91,7 +91,7 @@ mv "$tmp/kwcase.sql" fixtures/kwcase.sql
 
 # 4. Tampering with the total itself must fail.
 sed "s/^EXPECTED_CASES=$cases$/EXPECTED_CASES=$((cases + 1))/" tools/parity.sh > tools/parity-tampered.sh
-expect_red "tampered EXPECTED_CASES" "expected $((cases + 1))" bash tools/parity-tampered.sh
+expect_red "tampered EXPECTED_CASES" "lists $cases cases, EXPECTED_CASES=$((cases + 1))" bash tools/parity-tampered.sh
 
 echo "gates: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
