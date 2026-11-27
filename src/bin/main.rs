@@ -407,10 +407,7 @@ fn process_file(
         std::io::stdin()
             .read_to_end(&mut buffer)
             .map_err(|err| error(&format!("Failed to read stdin: {err}")))?;
-        codec.decode(&buffer).map_err(|message| {
-            eprintln!("{message}");
-            1
-        })?
+        codec.decode(&buffer).map_err(decode_error)?
     } else {
         let bytes = std::fs::read(filename).map_err(|err| {
             error(&format!(
@@ -420,10 +417,7 @@ fn process_file(
         })?;
         // A decode failure is a traceback upstream: the message goes out
         // without the `[ERROR] ` prefix, and nothing is written.
-        codec.decode(&bytes).map_err(|message| {
-            eprintln!("{message}");
-            1
-        })?
+        codec.decode(&bytes).map_err(decode_error)?
     };
 
     let formatted = format_sql(&data, options)
@@ -443,6 +437,17 @@ fn process_file(
         .write_all(formatted.as_bytes())
         .and_then(|()| stdout.flush())
         .map_err(|err| error(&format!("Failed to write stdout: {err}")))
+}
+
+/// A decode failure is a traceback upstream; the last line names the
+/// exception, so printing the same line keeps `tail -1` byte-identical.
+fn decode_error(message: String) -> u8 {
+    if message.starts_with("UnicodeError") {
+        eprintln!("{message}");
+    } else {
+        eprintln!("UnicodeDecodeError: {message}");
+    }
+    1
 }
 
 /// Write `text` with `codec`, mirroring `open(outfile, 'w', encoding=...)`:
@@ -468,33 +473,6 @@ fn write_encoded(
             io_message(&err, shown)
         ))
     })
-}
-
-#[allow(dead_code)]
-fn unused_placeholder() {
-    {
-            error(&format!(
-                "Failed to open {shown}: {}",
-                io_message(&err, &shown)
-            ))
-        })?;
-        return Ok(());
-    }
-    if let (Some(outfile), Some(shown_out)) = (outfile, shown_out) {
-        std::fs::write(outfile, &formatted).map_err(|err| {
-            error(&format!(
-                "Failed to open {shown_out}: {}",
-                io_message(&err, &shown_out)
-            ))
-        })?;
-        return Ok(());
-    }
-
-    let mut stdout = std::io::stdout();
-    stdout
-        .write_all(formatted.as_bytes())
-        .and_then(|()| stdout.flush())
-        .map_err(|err| error(&format!("Failed to write stdout: {err}")))
 }
 
 /// CPython's `str(OSError)` shape, e.g. `[Errno 2] No such file or directory:

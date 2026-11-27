@@ -1,0 +1,1 @@
+select 'café' as café, 'naïve' as n from t where nom = 'René';

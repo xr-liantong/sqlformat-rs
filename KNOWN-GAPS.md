@@ -16,7 +16,6 @@ CLI flags the upstream `sqlformat` binary really accepts:
 - `-s`, `--use_space_around_operators`
 - `-l`, `--language`
 - `--indent_after_first`, `--indent_columns`
-- `--encoding`
 
 Keyword arguments of `sqlparse.format()` that the upstream CLI never accepted
 (`--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
@@ -61,6 +60,24 @@ use the `regex` crate, so a combining mark directly after a letter can split a
 token differently. Plain ASCII and precomposed Latin/Cyrillic/Greek text are
 unaffected; the corpus is pure ASCII.
 
+## Decode / encode failures
+
+`--encoding` is implemented, but a failure is a Python traceback upstream and a
+single line here. The last line of that traceback is reproduced byte for byte
+(`UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 11:
+invalid continuation byte`, `LookupError: unknown encoding: nope`,
+`UnicodeError: UTF-16 stream does not start with BOM`), and nothing is written
+to stdout or the output file, so `rc` and the output bytes match; only the
+traceback frames differ. `tools/cli_matrix.sh` compares that last line.
+
+## `-r --strip-comments` with a comment directly before `)`
+
+`select f(/*c*/x, y /*d*/) from t;` with `--strip-comments -r` keeps one space
+before `)` upstream (`select f(x, y )`, 23 B) and drops it here
+(`select f(x, y)`, 22 B). Without `-r` the two agree, and every other
+comment placement is byte-identical. Pinned as a `gap` case in
+`tools/cli_matrix.sh`.
+
 ## Error text
 
 Runtime failures use upstream's `[ERROR] ...` line and exit 1, including a
@@ -74,7 +91,7 @@ Upstream passes `prog='sqlformat'` to ArgumentParser, so that name is fixed and
 a byte comparison needs no binary rename (unlike xlsx2csv's argparse). `I/O`
 failures copy CPython's `str(OSError)`: `[Errno 2] No such file or directory:
 'nope.sql'`. `tests/cli.rs` pins the same bytes without needing Python;
-`tools/cli_matrix.sh` compares 26 invocations against a live upstream.
+`tools/cli_matrix.sh` compares 34 invocations against a live upstream.
 
 ## CI
 

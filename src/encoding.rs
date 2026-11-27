@@ -264,19 +264,17 @@ fn decode_utf16(bytes: &[u8], order: Utf16Order) -> Result<String, String> {
         Utf16Order::Bom => match bytes {
             [0xFF, 0xFE, ..] => (false, 2),
             [0xFE, 0xFF, ..] => (true, 2),
-            _ => {
-                return Err("'utf-16' codec can't decode bytes in position 0-1: \
-                            missing byte order mark"
-                    .to_string())
-            }
+            // `TextIOWrapper`'s incremental decoder raises this, not a
+            // UnicodeDecodeError from the codec itself.
+            _ => return Err("UnicodeError: UTF-16 stream does not start with BOM".to_string()),
         },
     };
     let body = &bytes[start..];
     if body.len() % 2 != 0 {
+        let leftover = *body.last().unwrap_or(&0);
+        let inner = if big { "utf-16-be" } else { "utf-16-le" };
         return Err(format!(
-            "'utf-16' codec can't decode bytes in position {}-{}: truncated data",
-            bytes.len() - 1,
-            bytes.len() - 1
+            "'{inner}' codec can't decode byte 0x{leftover:02x} in position 0: truncated data"
         ));
     }
     let units = body.chunks_exact(2).map(|pair| {

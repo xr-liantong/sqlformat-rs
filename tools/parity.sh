@@ -76,6 +76,10 @@ check indent-width-4 golden-iw4.sql --indent_width 4
 check_in strip-comments golden-strip.sql fixtures/comments.sql --strip-comments
 check_in strip-comments-reindent golden-strip-r.sql fixtures/comments.sql --strip-comments -r
 
+# --encoding: the fixture is latin-1 on disk, the golden is what upstream writes
+# to stdout (always the process encoding, not --encoding).
+check_in encoding-latin1 golden-latin1.sql fixtures/latin1.sql --encoding latin-1
+
 # v0.2 reindent options, compared on a list/CASE heavy fixture.check_in wrap_after-20 golden-wrap20.sql fixtures/lists.sql -r --wrap_after 20
 check_in comma_first golden-comma.sql fixtures/lists.sql -r --comma_first true
 check_in comma_first-wrap_after-30 golden-comma-w30.sql fixtures/lists.sql -r --comma_first true --wrap_after 30

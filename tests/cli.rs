@@ -120,3 +120,66 @@ fn io_failures_use_cpython_errno_text() {
     assert_eq!(rc, 1);
     assert!(stderr.starts_with("[ERROR] Failed to read"));
 }
+
+/// The `--encoding` cases: decode with the named codec, write the output file
+/// with the same codec, keep stdout at the process encoding (upstream writes
+/// `sys.stdout`, which is utf-8 here).
+#[test]
+fn encoding_decodes_input_and_encodes_file_output() {
+    let dir = std::env::temp_dir().join(format!("sqlformat-encoding-{}", std::process::id()));
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let latin = dir.join("latin.sql");
+    // `select 'café';` in ISO-8859-1: é is 0xE9, not valid utf-8.
+    std::fs::write(&latin, b"select 'caf\xe9';\n").expect("write fixture");
+
+    // stdout stays utf-8, so the output bytes are the utf-8 form.
+    let out = Command::new(binary())
+        .args(["--encoding", "latin-1"])
+        .arg(&latin)
+        .output()
+        .expect("spawn");
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(out.stdout, "select 'café';".as_bytes());
+
+    // -o writes with `--encoding`, so é is one byte again.
+    let written = dir.join("out.sql");
+    let out = Command::new(binary())
+        .args(["--encoding", "latin-1"])
+        .arg(&latin)
+        .args(["-o"])
+        .arg(&written)
+        .output()
+        .expect("spawn");
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        std::fs::read(&written).expect("out.sql"),
+        b"select 'caf\xe9';"
+    );
+
+    // Default utf-8 rejects the same bytes; the last stderr line is CPython's
+    // UnicodeDecodeError line, and nothing is written.
+    let out = Command::new(binary()).arg(&latin).output().expect("spawn");
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(out.stdout, b"");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr).trim_end(),
+        "UnicodeDecodeError: 'utf-8' codec can't decode byte 0xe9 in position 11: \
+         invalid continuation byte"
+    );
+
+    // An unknown codec name is refused; a known one that cannot decode the
+    // bytes is not silently treated as utf-8.
+    let out = Command::new(binary())
+        .args(["--encoding", "nope"])
+        .arg(&latin)
+        .output()
+        .expect("spawn");
+    assert_eq!(out.status.code(), Some(1));
+    assert_eq!(
+        String::from_utf8_lossy(&out.stderr).trim_end(),
+        "LookupError: unknown encoding: nope"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -19,6 +19,11 @@ tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 printf 'select a,b from t where x=1;\n' > "$tmp/kw.sql"
 printf 'select 1;\n' > "$tmp/s1.sql"
+# latin-1 bytes on disk, and a BOM-prefixed UTF-16 file.
+printf "select 'caf\xe9';\n" > "$tmp/lat.sql"
+printf 'select 1; -- c\n' > "$tmp/c.sql"
+printf 'select f(/*c*/x, y /*d*/) from t;\n' > "$tmp/par.sql"
+python3 -c "open('$tmp/u16.sql','wb').write(\"select 'caf\xe9';\n\".encode('utf-16'))"
 cd "$tmp" || exit 2
 
 fails=0
@@ -81,11 +86,39 @@ run s1.sql s1.sql
 run -o /tmp/out.csv s1.sql s1.sql
 run --in-place -
 run nope.sql
-gap --encoding latin-1 s1.sql
+run --encoding latin-1 lat.sql
+run --encoding utf-16 u16.sql
+run --encoding latin-1 s1.sql
+
+# A decode failure is a traceback upstream: the class line still matches.
+cases=$((cases + 1))
+python3 -m sqlparse --encoding utf-8 lat.sql 2>&1 | tail -1 > u.err
+"$PORT" --encoding utf-8 lat.sql 2>&1 | tail -1 > r.err
+if ! cmp -s u.err r.err; then
+    fails=$((fails + 1))
+    printf 'DIFF  decode-error last line\n'
+    diff -u u.err r.err | head -8 | sed 's/^/  /'
+fi
+
+# File output is written with --encoding, stdout is not.
+cases=$((cases + 1))
+rm -f u.lat r.lat
+python3 -m sqlparse --encoding latin-1 lat.sql -o u.lat
+"$PORT" --encoding latin-1 lat.sql -o r.lat
+if ! cmp -s u.lat r.lat; then
+    fails=$((fails + 1))
+    printf 'DIFF  --encoding latin-1 -o (file bytes)\n'
+fi
+gap --encoding nope lat.sql
 gap -l python s1.sql
 gap --indent_after_first s1.sql
 gap --indent_columns s1.sql
-gap --strip-comments s1.sql
+run --strip-comments s1.sql
+run --strip-comments c.sql
+run --strip-comments -r c.sql
+# A comment directly before `)` survives as one space upstream; the port
+# drops it (see docs/KNOWN-GAPS.md).
+gap --strip-comments -r par.sql
 gap -s s1.sql
 gap -a s1.sql
 

@@ -23,6 +23,7 @@ Implemented flags:
 | `--comma_first true` | break *before* the comma (`type=bool`: any non-empty value, even `false`, turns it on) |
 | `--compact true` | no line break before `END` in `CASE` (`type=bool`, same rule) |
 | `--strip-comments` | drop comments; SQL hints (`/*+ … */`, `--+ …`) are kept |
+| `--encoding NAME` | decode the input with `NAME` and encode the output file with it, default `utf-8` |
 | `-o`, `--outfile FILE` | write to a file instead of stdout |
 | `--in-place` | rewrite the input files |
 | `-h`, `--help`, `--version` | help / upstream version string `0.6.1` |
@@ -32,8 +33,16 @@ The help text, the argparse refusals (`usage:` plus `sqlformat: error: …`,
 exit 2) and the `[ERROR] …` lines are byte-identical to upstream — including
 the fixed `prog='sqlformat'`, the `[Errno N] strerror: 'path'` shape, and the
 attached-value forms `-k=upper` / `-kupper` / `--keywords=upper`.
-`tools/cli_matrix.sh` compares 26 such invocations against a live upstream and
+`tools/cli_matrix.sh` compares 34 such invocations against a live upstream and
 pins 6 flags as *known gaps* (a gap that starts matching fails the script).
+
+`--encoding` accepts the codecs `sqlformat` users actually keep `.sql` files
+in — `utf-8`, `ascii`, `latin-1` (and its `iso-8859-1` aliases), `cp1252`, and
+`utf-16` / `utf-16-le` / `utf-16-be` — with CPython's exact error text. stdout
+is always the process encoding (utf-8), as upstream writes `sys.stdout`; only
+`-o` / `--in-place` use `--encoding`. A name outside the table is refused with
+`LookupError: unknown encoding: <name>` and exit 1, never silently treated as
+utf-8.
 
 argparse's long-option prefixes work as upstream does: `--indent_w 4` means
 `--indent_width 4`, and an ambiguous prefix fails the same way, listing the
@@ -42,7 +51,7 @@ candidates in definition order (`ambiguous option: --i could match --in-place,
 filename does not have to be UTF-8; it is passed through as bytes.
 
 Every other upstream flag (`-a`, `-s`, `-l`, `--indent_after_first`,
-`--indent_columns`, `--encoding`) exits with status **2** and prints
+`--indent_columns`) exits with status **2** and prints
 `sqlformat: error: option <flag> is not implemented by this port`. See
 [KNOWN-GAPS.md](KNOWN-GAPS.md).
 
