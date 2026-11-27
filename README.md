@@ -138,6 +138,11 @@ PASS tokens     tools/check_tokens.sh      token stream vs sqlparse, token by to
 gates: 6 passed, 0 failed
 ```
 
+**There is no CI.** The token that pushes this repository has no `workflow`
+scope, so GitHub rejects any commit that adds `.github/workflows/`; no badge
+exists and none should be assumed. The gate is two steps: `tools/gates.sh` on
+the build box, then the same script again from a clean clone (`git clone` →
+`cargo build --release` → `tools/gates.sh`).
 The script exits non-zero if any gate fails and prints that gate's output. Its
 failure path is itself checked: appending a badly formatted function makes it
 report `FAIL fmt` and exit 1 (verified on 2026-11-19). All six are green on the
