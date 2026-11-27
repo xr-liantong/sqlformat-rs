@@ -52,11 +52,9 @@ Formatting Options:
 ";
 
 /// Flags upstream has but this port does not implement yet.
-const UNSUPPORTED: [&str; 11] = [
+const UNSUPPORTED: [&str; 9] = [
     "-a",
     "--reindent_aligned",
-    "-s",
-    "--use_space_around_operators",
     "-l",
     "--language",
     "--indent_after_first",
@@ -272,6 +270,7 @@ fn run() -> Result<(), u8> {
             "-r" | "--reindent" => options.reindent = true,
             "--in-place" => in_place = true,
             "--strip-comments" => options.strip_comments = true,
+            "-s" | "--use_space_around_operators" => options.space_around_operators = true,
             _ if UNSUPPORTED.contains(&arg.as_str()) => {
                 return Err(usage_error(&format!(
                     "option {arg} is not implemented by this port"

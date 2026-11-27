@@ -24,6 +24,8 @@ pub struct FormatOptions {
     pub compact: bool,
     /// `--strip-comments`: drop comments, keeping their trailing line breaks.
     pub strip_comments: bool,
+    /// `-s/--use_space_around_operators`: one space on each side of operators.
+    pub space_around_operators: bool,
 }
 
 impl Default for FormatOptions {
@@ -37,6 +39,7 @@ impl Default for FormatOptions {
             comma_first: false,
             compact: false,
             strip_comments: false,
+            space_around_operators: false,
         }
     }
 }
@@ -173,6 +176,98 @@ fn strip_comments(tokens: Vec<Token>) -> Vec<Token> {
     out
 }
 
+/// Can this token stand as an operand in `group_operator`'s sense?
+///
+/// `sqlparse.engine.grouping.group_operator` promotes a `*` (Wildcard) to
+/// `Operator` only when both neighbours are operands — numbers, strings,
+/// names, a bracketed group, or a `CURRENT_*` keyword — which is why
+/// `count(*)` keeps its `*` and `a*-1` gains spaces.
+fn operand_like(token: &Token) -> bool {
+    matches!(
+        token.ttype,
+        Tk::NumberInteger
+            | Tk::NumberFloat
+            | Tk::NumberHex
+            | Tk::Name
+            | Tk::NameBuiltin
+            | Tk::NamePlaceholder
+            | Tk::StringSingle
+            | Tk::StringSymbol
+    ) || (token.ttype.is_keyword()
+        && matches!(
+            token.value.as_str(),
+            "CURRENT_DATE" | "CURRENT_TIME" | "CURRENT_TIMESTAMP"
+        ))
+        || matches!(token.value.as_str(), "(" | ")" | "[" | "]")
+}
+
+/// `-s/--use_space_around_operators`: `filters.others.SpacesAroundOperatorsFilter`.
+///
+/// A space goes on each side of every `Operator`/`Comparison` token, except
+/// where the neighbour is exactly `Token.Text.Whitespace`; a
+/// `Whitespace.Newline` neighbour still gets one, because upstream compares
+/// `ttype` for identity and the newline type is not the plain whitespace type.
+/// The right-hand space lands before the next non-whitespace token (that is
+/// what `insert_after(skip_ws=True)` does), so in `1 =\n2` it shows up at the
+/// start of the next line, where the serializer's per-line rstrip cannot eat it.
+fn spaces_around_operators(tokens: Vec<Token>) -> Vec<Token> {
+    fn space() -> Token {
+        Token {
+            ttype: Tk::Whitespace,
+            value: " ".to_string(),
+        }
+    }
+    let mut out: Vec<Token> = Vec::with_capacity(tokens.len() + 8);
+    let mut index = 0;
+    while index < tokens.len() {
+        let token = &tokens[index];
+        let previous = tokens[..index]
+            .iter()
+            .rev()
+            .find(|previous| !previous.ttype.is_whitespace());
+        let next = tokens[index + 1..]
+            .iter()
+            .find(|next| !next.ttype.is_whitespace());
+        let empty_brackets = previous.is_some_and(|previous| {
+            matches!(previous.value.as_str(), "(" | "[")
+                && next.is_some_and(|next| matches!(next.value.as_str(), ")" | "]"))
+        });
+        let promotes_wildcard = token.ttype == Tk::Wildcard
+            && !empty_brackets
+            && previous.is_some_and(operand_like)
+            && next.is_some_and(operand_like);
+        if !token.ttype.in_operator() && !promotes_wildcard {
+            out.push(token.clone());
+            index += 1;
+            continue;
+        }
+        let previous_is_plain_whitespace = out
+            .last()
+            .map(|previous| previous.ttype == Tk::Whitespace)
+            .unwrap_or(true);
+        if !previous_is_plain_whitespace {
+            out.push(space());
+        }
+        out.push(token.clone());
+        let next_is_plain_whitespace = tokens
+            .get(index + 1)
+            .map(|next| next.ttype == Tk::Whitespace)
+            .unwrap_or(true);
+        if next_is_plain_whitespace {
+            index += 1;
+            continue;
+        }
+        let mut lookahead = index + 1;
+        while lookahead < tokens.len() && tokens[lookahead].ttype.is_whitespace() {
+            out.push(tokens[lookahead].clone());
+            lookahead += 1;
+        }
+        out.push(space());
+        index = lookahead;
+    }
+    out
+}
+
 fn emit(
     tokens: Vec<Token>,
     options: &FormatOptions,
@@ -180,6 +275,11 @@ fn emit(
     reindent: &mut ReindentFilter,
     out: &mut String,
 ) -> Result<(), PortError> {
+    let tokens = if options.space_around_operators {
+        spaces_around_operators(tokens)
+    } else {
+        tokens
+    };
     let tokens = if options.strip_comments {
         strip_comments(tokens)
     } else {

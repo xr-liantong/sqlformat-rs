@@ -23,6 +23,7 @@ printf 'select 1;\n' > "$tmp/s1.sql"
 printf "select 'caf\xe9';\n" > "$tmp/lat.sql"
 printf 'select 1; -- c\n' > "$tmp/c.sql"
 printf 'select f(/*c*/x, y /*d*/) from t;\n' > "$tmp/par.sql"
+printf 'select a+1, a*-1, a*(b+c), count(*), t.* from t;\n' > "$tmp/op.sql"
 python3 -c "open('$tmp/u16.sql','wb').write(\"select 'caf\xe9';\n\".encode('utf-16'))"
 cd "$tmp" || exit 2
 
@@ -116,10 +117,12 @@ gap --indent_columns s1.sql
 run --strip-comments s1.sql
 run --strip-comments c.sql
 run --strip-comments -r c.sql
+run -s op.sql
+run --use_space_around_operators op.sql
+run -s -r op.sql
 # A comment directly before `)` survives as one space upstream; the port
 # drops it (see docs/KNOWN-GAPS.md).
 gap --strip-comments -r par.sql
-gap -s s1.sql
 gap -a s1.sql
 
 if [ "$fails" -eq 0 ]; then

@@ -24,6 +24,7 @@ Implemented flags:
 | `--compact true` | no line break before `END` in `CASE` (`type=bool`, same rule) |
 | `--strip-comments` | drop comments; SQL hints (`/*+ … */`, `--+ …`) are kept |
 | `--encoding NAME` | decode the input with `NAME` and encode the output file with it, default `utf-8` |
+| `-s`, `--use_space_around_operators` | one space around operators; a `*` between two operands is an operator (`a*-1` → `a * -1`), `count(*)` keeps its `*` |
 | `-o`, `--outfile FILE` | write to a file instead of stdout |
 | `--in-place` | rewrite the input files |
 | `-h`, `--help`, `--version` | help / upstream version string `0.6.1` |
@@ -33,7 +34,7 @@ The help text, the argparse refusals (`usage:` plus `sqlformat: error: …`,
 exit 2) and the `[ERROR] …` lines are byte-identical to upstream — including
 the fixed `prog='sqlformat'`, the `[Errno N] strerror: 'path'` shape, and the
 attached-value forms `-k=upper` / `-kupper` / `--keywords=upper`.
-`tools/cli_matrix.sh` compares 34 such invocations against a live upstream and
+`tools/cli_matrix.sh` compares 37 such invocations against a live upstream and
 pins 6 flags as *known gaps* (a gap that starts matching fails the script).
 
 `--encoding` accepts the codecs `sqlformat` users actually keep `.sql` files

@@ -13,7 +13,6 @@ matching upstream, the script fails so this file gets updated.
 CLI flags the upstream `sqlformat` binary really accepts:
 
 - `-a`, `--reindent_aligned` — needs `AlignedIndentFilter`
-- `-s`, `--use_space_around_operators`
 - `-l`, `--language`
 - `--indent_after_first`, `--indent_columns`
 
@@ -24,6 +23,12 @@ v0.2 we print the same `unrecognized arguments: <flag>` line):
 
 - `--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
   `--output_format`
+
+`-s/--use_space_around_operators` landed with the `-s` round: a space goes on
+each side of every `Operator`/`Comparison` token, and a `*` (Wildcard) is
+promoted to an operator exactly when `group_operator` would promote it — both
+neighbours operand-like, with `count(*)` excluded because `(`/`)` are the
+group's own delimiters.
 
 `--wrap_after`, `--comma_first` and `--compact` landed in v0.2 and match
 upstream on `fixtures/lists.sql` (five golden cases, including all three

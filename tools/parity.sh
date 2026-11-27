@@ -79,6 +79,8 @@ check_in strip-comments-reindent golden-strip-r.sql fixtures/comments.sql --stri
 # --encoding: the fixture is latin-1 on disk, the golden is what upstream writes
 # to stdout (always the process encoding, not --encoding).
 check_in encoding-latin1 golden-latin1.sql fixtures/latin1.sql --encoding latin-1
+check_in space-operators golden-operators.sql fixtures/operators.sql -s
+check_in space-operators-reindent golden-operators-r.sql fixtures/operators.sql -s -r
 
 # v0.2 reindent options, compared on a list/CASE heavy fixture.check_in wrap_after-20 golden-wrap20.sql fixtures/lists.sql -r --wrap_after 20
 check_in comma_first golden-comma.sql fixtures/lists.sql -r --comma_first true

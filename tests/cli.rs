@@ -183,3 +183,36 @@ fn encoding_decodes_input_and_encodes_file_output() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `-s/--use_space_around_operators` matches upstream on the two cases that
+/// decide the rule: a `*` between operands becomes an operator, and the `*`
+/// of `count(*)` stays a wildcard because the parens are the group's own
+/// delimiters. Upstream 0.6.1 output was captured in `fixtures/golden-operators.sql`.
+#[test]
+fn space_around_operators_matches_upstream() {
+    let dir = std::env::temp_dir().join(format!("sqlformat-cli-ops-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let input = dir.join("ops.sql");
+    std::fs::write(&input, "select a*-1, a*(b+c), count(*), t.* from t;\n").expect("write input");
+
+    let out = Command::new(binary())
+        .arg("-s")
+        .arg(&input)
+        .output()
+        .expect("spawn");
+    assert_eq!(out.status.code(), Some(0));
+    assert_eq!(
+        out.stdout,
+        b"select a * -1, a * (b + c), count(*), t.* from t;"
+    );
+
+    // The long spelling is the same flag.
+    let long = Command::new(binary())
+        .args(["--use_space_around_operators"])
+        .arg(&input)
+        .output()
+        .expect("spawn");
+    assert_eq!(long.stdout, out.stdout);
+
+    let _ = std::fs::remove_dir_all(&dir);
+}
