@@ -216,3 +216,44 @@ fn space_around_operators_matches_upstream() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `--indent_columns` forces reindent (and reindent forces strip_whitespace) as
+/// `validate_options` does, and `--indent_after_first` only shifts the leading
+/// whitespace of everything after the first line. Upstream 0.6.1 output is in
+/// `fixtures/golden-indent-*.sql`.
+#[test]
+fn indent_columns_and_after_first_match_upstream() {
+    let dir = std::env::temp_dir().join(format!("sqlformat-cli-indent-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    let input = dir.join("indent.sql");
+    std::fs::write(
+        &input,
+        "select aaaaaaaaaa, bbbbbbbbbb from t where x = 1;\n",
+    )
+    .expect("write");
+
+    let columns = Command::new(binary())
+        .args(["--indent_columns"])
+        .arg(&input)
+        .output()
+        .expect("spawn");
+    assert_eq!(columns.status.code(), Some(0));
+    assert_eq!(
+        columns.stdout,
+        b"select\n  aaaaaaaaaa,\n  bbbbbbbbbb\nfrom t\nwhere x = 1;"
+    );
+
+    // `--indent_after_first` alone does not reindent; it only indents the
+    // continuation lines the reindent filter emits.
+    let after_first = Command::new(binary())
+        .args(["-r", "--indent_after_first"])
+        .arg(&input)
+        .output()
+        .expect("spawn");
+    assert_eq!(
+        after_first.stdout,
+        b"select aaaaaaaaaa,\n       bbbbbbbbbb\n  from t\n  where x = 1;"
+    );
+
+    let _ = std::fs::remove_dir_all(&dir);
+}

@@ -112,14 +112,15 @@ if ! cmp -s u.lat r.lat; then
 fi
 gap --encoding nope lat.sql
 gap -l python s1.sql
-gap --indent_after_first s1.sql
-gap --indent_columns s1.sql
 run --strip-comments s1.sql
 run --strip-comments c.sql
 run --strip-comments -r c.sql
 run -s op.sql
 run --use_space_around_operators op.sql
 run -s -r op.sql
+run --indent_columns op.sql
+run -r --indent_after_first op.sql
+run --indent_columns --indent_after_first op.sql
 # A comment directly before `)` survives as one space upstream; the port
 # drops it (see docs/KNOWN-GAPS.md).
 gap --strip-comments -r par.sql

@@ -63,7 +63,10 @@ expect_red() {
 
 # 1. A case that is quietly dropped must fall foul of the fixed total.
 sed 's/^check default golden-default.sql$/# &/' tools/parity.sh > tools/parity-dropped.sh
-expect_red "one case commented out" "expected 24" bash tools/parity-dropped.sh
+# The expected totals are read from parity.sh, not written down twice: a
+# hardcoded number silently stops checking as soon as a case is added.
+cases=$(sed -n 's/^EXPECTED_CASES=\([0-9]*\)$/\1/p' tools/parity.sh)
+expect_red "one case commented out" "expected $cases" bash tools/parity-dropped.sh
 
 # 2. A corrupted golden must fail on the bytes.
 cp fixtures/golden-r.sql "$tmp/golden-r.sql"
@@ -77,8 +80,8 @@ expect_red "missing fixture" "missing fixture: fixtures/kwcase.sql" bash tools/p
 mv "$tmp/kwcase.sql" fixtures/kwcase.sql
 
 # 4. Tampering with the total itself must fail.
-sed 's/^EXPECTED_CASES=24$/EXPECTED_CASES=25/' tools/parity.sh > tools/parity-tampered.sh
-expect_red "tampered EXPECTED_CASES" "expected 25" bash tools/parity-tampered.sh
+sed "s/^EXPECTED_CASES=$cases$/EXPECTED_CASES=$((cases + 1))/" tools/parity.sh > tools/parity-tampered.sh
+expect_red "tampered EXPECTED_CASES" "expected $((cases + 1))" bash tools/parity-tampered.sh
 
 echo "gates: $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
