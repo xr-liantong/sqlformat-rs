@@ -24,6 +24,7 @@ printf "select 'caf\xe9';\n" > "$tmp/lat.sql"
 printf 'select 1; -- c\n' > "$tmp/c.sql"
 printf 'select f(/*c*/x, y /*d*/) from t;\n' > "$tmp/par.sql"
 printf 'select a+1, a*-1, a*(b+c), count(*), t.* from t;\n' > "$tmp/op.sql"
+cp fixtures/language.sql "$tmp/lang.sql"
 python3 -c "open('$tmp/u16.sql','wb').write(\"select 'caf\xe9';\n\".encode('utf-16'))"
 cd "$tmp" || exit 2
 
@@ -111,11 +112,21 @@ if ! cmp -s u.lat r.lat; then
     printf 'DIFF  --encoding latin-1 -o (file bytes)\n'
 fi
 gap --encoding nope lat.sql
-gap -l python s1.sql
+# `-l` with a grouping filter: upstream snapshots `TokenList.value` when the
+# group is created, so those groups print the text from before `-s` and
+# `--strip-comments`; this port prints the filtered text.
+gap -l python -s op.sql
+gap -l python --strip-comments par.sql
 run --strip-comments s1.sql
 run --strip-comments c.sql
 run --strip-comments -r c.sql
 run -s op.sql
+run -l python lang.sql
+run -l php lang.sql
+run -l python -r lang.sql
+run -lpython lang.sql
+run --language=php lang.sql
+run -l bogus lang.sql
 run --use_space_around_operators op.sql
 run -s -r op.sql
 run --indent_columns op.sql

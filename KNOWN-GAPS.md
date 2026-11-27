@@ -13,8 +13,6 @@ matching upstream, the script fails so this file gets updated.
 CLI flags the upstream `sqlformat` binary really accepts:
 
 - `-a`, `--reindent_aligned` — needs `AlignedIndentFilter`
-- `-l`, `--language`
-- `--indent_after_first`, `--indent_columns`
 
 Keyword arguments of `sqlparse.format()` that the upstream CLI never accepted
 (`--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
@@ -23,6 +21,18 @@ v0.2 we print the same `unrecognized arguments: <flag>` line):
 
 - `--indent_tabs`, `--right_margin`, `--truncate_strings`, `--truncate_char`,
   `--output_format`
+
+`-l/--language python|php` landed last: each statement is wrapped like
+`OutputPythonFilter` / `OutputPHPFilter` does (`sql = ('…')`, `$sql  = "…"`,
+`sql2`/`$sql2` after the first, `\`/`'`/`"`/`$` escaped, `";` + `$sql .=
+"` on every line break). Two combinations stay different: `-l` with `-s` or
+with `--strip-comments` prints the *filtered* text inside groups, while
+upstream prints the text a group had when it was created (`TokenList.value` is
+snapshotted and never refreshed), so upstream keeps the pre-spacing text and
+even the comments it just stripped. Both are pinned in `tools/cli_matrix.sh`
+as gaps. Every other combination — `-l` alone, with `-r`, `-k`, `-i`,
+`--comma_first`, `--wrap_after`, `--compact` — is byte-identical, including
+`-l python -r` on the 3.5 MB corpus.
 
 `--indent_columns` and `--indent_after_first` landed with the `-s` round:
 `indent_columns` forces `reindent` (which forces `strip_whitespace`) exactly as

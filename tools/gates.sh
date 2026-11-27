@@ -46,7 +46,7 @@ else
 fi
 
 tmp=$(mktemp -d)
-trap 'rm -rf "$tmp" tools/parity-dropped.bash tools/parity-tampered.sh' EXIT
+trap 'rm -rf "$tmp" tools/parity-dropped.sh tools/parity-tampered.sh' EXIT
 
 # expect_red <label> <stderr/stdout keyword> <command...>
 expect_red() {
@@ -73,7 +73,10 @@ sed 's/^check default golden-default.sql$/# &/' tools/parity.sh > tools/parity-d
 # The expected totals are read from parity.sh, not written down twice: a
 # hardcoded number silently stops checking as soon as a case is added.
 cases=$(sed -n 's/^EXPECTED_CASES=\([0-9]*\)$/\1/p' tools/parity.sh)
-expect_red "one case commented out" "expected $cases" bash tools/parity-dropped.sh
+# The keyword names the count a dropped case leaves behind, not just the
+# expected total: with no binary at all parity also reports "expected N", and
+# this test must not pass for that reason (#10).
+expect_red "one case commented out" "$((cases - 1)) cases handled, expected $cases" bash tools/parity-dropped.sh
 
 # 2. A corrupted golden must fail on the bytes.
 cp fixtures/golden-r.sql "$tmp/golden-r.sql"

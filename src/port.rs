@@ -2,12 +2,12 @@
 
 use std::fmt;
 
-use crate::filters::{self, ReindentFilter, StripWhitespace};
+use crate::filters::{self, split_unquoted_newlines, ReindentFilter, StripWhitespace};
 use crate::group;
 use crate::lexer::{Lexer, Token};
 use crate::splitter::Splitter;
 use crate::tokens::Tk;
-use crate::tree::Tree;
+use crate::tree::{Id, Tree};
 
 /// CLI/formatter options in the subset this port implements.
 #[derive(Clone, Debug)]
@@ -30,6 +30,8 @@ pub struct FormatOptions {
     pub indent_after_first: bool,
     /// `--indent_columns`: lay the identifier list out by column width.
     pub indent_columns: bool,
+    /// `-l/--language`: wrap each statement as `python` or `php` source.
+    pub output_format: Option<String>,
 }
 
 impl Default for FormatOptions {
@@ -46,6 +48,7 @@ impl Default for FormatOptions {
             space_around_operators: false,
             indent_after_first: false,
             indent_columns: false,
+            output_format: None,
         }
     }
 }
@@ -92,6 +95,7 @@ pub fn format_sql(sql: &str, options: &FormatOptions) -> Result<String, PortErro
     // Upstream `ReindentFilter.__init__`: `self.indent = 1 if indent_after_first else 0`.
     reindent.indent = if options.indent_after_first { 1 } else { 0 };
     let mut out = String::with_capacity(sql.len() + sql.len() / 4);
+    let mut count = 0usize;
 
     while let Some((ttype, start, end)) = lexer.next_token() {
         let mut value = sql[start..end].to_string();
@@ -107,11 +111,27 @@ pub fn format_sql(sql: &str, options: &FormatOptions) -> Result<String, PortErro
             }
         }
         if let Some(statement) = splitter.feed(ttype, &value) {
-            emit(statement, options, &mut strip, &mut reindent, &mut out)?;
+            count += 1;
+            emit(
+                statement,
+                options,
+                &mut strip,
+                &mut reindent,
+                &mut out,
+                count,
+            )?;
         }
     }
     if let Some(statement) = splitter.finish() {
-        emit(statement, options, &mut strip, &mut reindent, &mut out)?;
+        count += 1;
+        emit(
+            statement,
+            options,
+            &mut strip,
+            &mut reindent,
+            &mut out,
+            count,
+        )?;
     }
     Ok(out)
 }
@@ -163,7 +183,9 @@ fn strip_comments(tokens: Vec<Token>) -> Vec<Token> {
         let mut text = String::new();
         while end < tokens.len() {
             let current = &tokens[end];
-            if !current.ttype.is_comment() && !is_newline(current) {
+            // A hint is a comment too, but upstream keeps it, so the run of
+            // comment tokens that gets removed has to stop in front of one.
+            if (!current.ttype.is_comment() && !is_newline(current)) || is_hint(current.ttype) {
                 break;
             }
             text.push_str(&current.value);
@@ -284,6 +306,7 @@ fn emit(
     strip: &mut StripWhitespace,
     reindent: &mut ReindentFilter,
     out: &mut String,
+    count: usize,
 ) -> Result<(), PortError> {
     let tokens = if options.space_around_operators {
         spaces_around_operators(tokens)
@@ -297,13 +320,155 @@ fn emit(
     };
     let mut tree = Tree::from_tokens(tokens);
     let root = tree.root;
-    if options.reindent {
+    // `FilterStack.enable_grouping` is called by the three filters that need
+    // it, so grouping happens exactly when one of them is on.
+    let grouped = options.reindent || options.space_around_operators || options.strip_comments;
+    if grouped {
         group::group(&mut tree)?;
+    }
+    // `TokenList.__init__` snapshots its text (`super().__init__(None,
+    // ''.join(...))`), and no later filter refreshes it, so `-l` prints the
+    // pre-filter text of every group — the reindent output most visibly.
+    let stale = if options.output_format.is_some() && grouped {
+        Some(group_texts(&tree))
+    } else {
+        None
+    };
+    if options.reindent {
         strip.process(&mut tree, root);
         reindent.process(&mut tree, root);
     }
-    out.push_str(&filters::serialize(&tree, root));
+    match options.output_format.as_deref() {
+        Some(format) => {
+            // The output filters are `postprocess`, so `SerializerUnicode`
+            // still runs on their result: one rstrip per unquoted line.
+            let wrapped = wrap_statement(&tree, root, format, count, stale.as_ref());
+            let lines = split_unquoted_newlines(&wrapped);
+            out.push_str(
+                &lines
+                    .iter()
+                    .map(|line| line.trim_end())
+                    .collect::<Vec<_>>()
+                    .join("\n"),
+            );
+        }
+        None => out.push_str(&filters::serialize(&tree, root)),
+    }
     Ok(())
+}
+
+fn group_texts(tree: &Tree) -> Vec<Option<String>> {
+    let mut texts = vec![None; tree.nodes.len()];
+    for id in 0..tree.nodes.len() {
+        if tree.nodes[id].is_group() {
+            texts[id] = Some(tree.text(id));
+        }
+    }
+    texts
+}
+
+/// `-l/--language`: wrap one statement the way `OutputPythonFilter` and
+/// `OutputPHPFilter` do.
+///
+/// A whitespace token that contains a line break closes the literal, starts a
+/// new line indented under the variable name, and resumes with whatever
+/// followed the first `\n` in that token. Every other top-level token is
+/// emitted with `token.value` — which for a group is the text it had when it
+/// was created, not its current children.
+fn wrap_statement(
+    tree: &Tree,
+    root: Id,
+    format: &str,
+    count: usize,
+    stale: Option<&Vec<Option<String>>>,
+) -> String {
+    let python = format == "python";
+    let name = if python {
+        if count > 1 {
+            format!("sql{count}")
+        } else {
+            "sql".to_string()
+        }
+    } else if count > 1 {
+        format!("$sql{count}")
+    } else {
+        "$sql".to_string()
+    };
+    let text = filters::serialize(tree, root);
+    let has_nl = text.trim().lines().count() > 1;
+    let mut out = String::with_capacity(text.len() + text.len() / 8 + 32);
+    if count > 1 {
+        out.push('\n');
+    }
+    out.push_str(&name);
+    out.push(' ');
+    if !python && has_nl {
+        out.push(' ');
+    }
+    out.push_str("= ");
+    if python && has_nl {
+        out.push('(');
+    }
+    out.push_str(if python { "'" } else { "\"" });
+    let indent = " ".repeat(name.chars().count() + 4);
+    for index in 0..tree.child_count(root) {
+        let Some(id) = tree.child_at(root, index) else {
+            continue;
+        };
+        let node = &tree.nodes[id];
+        if !node.is_group()
+            && node.ttype.is_some_and(|ttype| ttype.is_whitespace())
+            && node.value.contains('\n')
+        {
+            let after = match node.value.split_once('\n') {
+                Some((_, after)) => after,
+                None => "",
+            };
+            if python {
+                out.push_str(" '");
+                out.push('\n');
+                out.push_str(&indent);
+                out.push('\'');
+            } else {
+                out.push_str(" \";");
+                out.push('\n');
+                out.push_str(&name);
+                out.push_str(" .= ");
+                out.push('"');
+            }
+            out.push_str(after);
+            continue;
+        }
+        let piece = if node.is_group() {
+            stale
+                .and_then(|texts| texts[id].clone())
+                .unwrap_or_else(|| tree.text(id))
+        } else {
+            node.value.clone()
+        };
+        out.push_str(&wrap_escape(&piece, python));
+    }
+    if python {
+        out.push('\'');
+        if has_nl {
+            out.push(')');
+        }
+    } else {
+        out.push('"');
+        out.push(';');
+    }
+    out
+}
+
+/// `OutputPythonFilter` / `OutputPHPFilter` escaping, in their order.
+fn wrap_escape(text: &str, python: bool) -> String {
+    if python {
+        text.replace('\\', "\\\\").replace('\'', "\\'")
+    } else {
+        text.replace('\\', "\\\\")
+            .replace('"', "\\\"")
+            .replace('$', "\\$")
+    }
 }
 
 #[cfg(test)]

@@ -20,7 +20,7 @@ fail=0
 
 # The number of cases this script must execute. Issue #10: commenting a case
 # out used to leave the gate green, so the total is checked at the end too.
-EXPECTED_CASES=27
+EXPECTED_CASES=31
 
 check() {
     local name=$1 golden=$2
@@ -99,6 +99,7 @@ check indent-width-4 golden-iw4.sql --indent_width 4
 
 check_in strip-comments golden-strip.sql fixtures/comments.sql --strip-comments
 check_in strip-comments-reindent golden-strip-r.sql fixtures/comments.sql --strip-comments -r
+check_in strip-comments-keeps-hint golden-strip-hint.sql fixtures/hint.sql --strip-comments -r
 
 # --encoding: the fixture is latin-1 on disk, the golden is what upstream writes
 # to stdout (always the process encoding, not --encoding).
@@ -108,6 +109,9 @@ check_in space-operators-reindent golden-operators-r.sql fixtures/operators.sql 
 check_in indent-columns golden-indent-columns.sql fixtures/indent.sql --indent_columns
 check_in indent-after-first golden-indent-after-first.sql fixtures/indent.sql -r --indent_after_first
 check_in indent-both golden-indent-both.sql fixtures/indent.sql -r --indent_columns --indent_after_first
+check_in language-python golden-language-python.sql fixtures/language.sql -l python
+check_in language-php golden-language-php.sql fixtures/language.sql -l php
+check_in language-python-reindent golden-language-python-r.sql fixtures/language.sql -l python -r
 
 # v0.2 reindent options, compared on a list/CASE heavy fixture.
 # (This line used to be glued to the comment above, so the case never ran --

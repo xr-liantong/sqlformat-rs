@@ -52,11 +52,9 @@ Formatting Options:
 ";
 
 /// Flags upstream has but this port does not implement yet.
-const UNSUPPORTED: [&str; 7] = [
+const UNSUPPORTED: [&str; 5] = [
     "-a",
     "--reindent_aligned",
-    "-l",
-    "--language",
     "--right_margin",
     "--truncate_strings",
     "--truncate_char",
@@ -94,6 +92,7 @@ fn option_label(flag: &str) -> &'static str {
         "--wrap_after" => "--wrap_after",
         "--comma_first" => "--comma_first",
         "--encoding" => "--encoding",
+        "-l" | "--language" => "-l/--language",
         _ => "--compact",
     }
 }
@@ -130,6 +129,7 @@ const LONGS: &[&str] = &[
     "--comma_first",
     "--compact",
     "--encoding",
+    "--language",
 ];
 
 /// Long options that consume the next token, or an `=value` suffix.
@@ -142,6 +142,7 @@ const TAKES_VALUE: &[&str] = &[
     "--comma_first",
     "--compact",
     "--encoding",
+    "--language",
 ];
 
 /// argparse lets any long option be shortened to an unambiguous prefix; a
@@ -205,7 +206,7 @@ fn expand(args: Vec<OsString>) -> Result<Vec<OsString>, u8> {
         }
         if text.starts_with('-') && text.len() > 2 {
             let flag = text.as_bytes()[1] as char;
-            if matches!(flag, 'k' | 'i' | 'o') {
+            if matches!(flag, 'k' | 'i' | 'o' | 'l') {
                 let rest = &text[2..];
                 let value = rest.strip_prefix('=').unwrap_or(rest);
                 out.push(OsString::from(format!("-{flag}")));
@@ -305,6 +306,21 @@ fn run() -> Result<(), u8> {
             "--encoding" => {
                 let value = take_value(&args, &mut index, "--encoding")?;
                 codec = Some(text_value(&value, "--encoding")?);
+            }
+            "-l" | "--language" => {
+                let label = option_label(&arg);
+                let value = take_value(&args, &mut index, label)?;
+                let text = text_value(&value, label)?;
+                // argparse `choices=('python', 'php')` is case sensitive.
+                match text.as_str() {
+                    "python" | "php" => options.output_format = Some(text),
+                    other => {
+                        return Err(usage_error(&format!(
+                            "argument {label}: invalid choice: '{other}' \
+                             (choose from 'python', 'php')"
+                        )))
+                    }
+                }
             }
             "-k" | "--keywords" | "-i" | "--identifiers" | "-o" | "--outfile"
             | "--indent_width" => {

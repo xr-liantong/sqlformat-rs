@@ -257,3 +257,48 @@ fn indent_columns_and_after_first_match_upstream() {
 
     let _ = std::fs::remove_dir_all(&dir);
 }
+
+/// `-l python|php` wraps each statement in a source snippet, with `sql2`,
+/// `sql3`, … after the first. `fixtures/golden-language-*.sql` are the
+/// upstream 0.6.1 bytes for `fixtures/language.sql`.
+#[test]
+fn language_wraps_statements_like_upstream() {
+    let root = Path::new(env!("CARGO_MANIFEST_DIR"));
+    let input = root.join("fixtures/language.sql");
+    for (codec, golden) in [
+        ("python", "fixtures/golden-language-python.sql"),
+        ("php", "fixtures/golden-language-php.sql"),
+    ] {
+        let expected = std::fs::read(root.join(golden)).expect("golden");
+        let out = Command::new(binary())
+            .args(["-l", codec])
+            .arg(&input)
+            .output()
+            .expect("spawn");
+        assert_eq!(out.status.code(), Some(0), "-l {codec}");
+        assert_eq!(
+            out.stdout, expected,
+            "-l {codec} drifted from upstream ({golden})"
+        );
+    }
+
+    // The attached form `-lphp` is the same flag, and the choice is case
+    // sensitive, exactly like argparse.
+    let attached = Command::new(binary())
+        .arg("-lphp")
+        .arg(&input)
+        .output()
+        .expect("spawn");
+    assert_eq!(
+        attached.stdout,
+        std::fs::read(root.join("fixtures/golden-language-php.sql")).expect("golden")
+    );
+    let (_, stderr, rc) = run(&["-l", "PYTHON", input.to_str().expect("utf-8")]);
+    assert_eq!(rc, 2);
+    assert_eq!(
+        stderr,
+        "usage: sqlformat [OPTIONS] FILE [FILE ...]\n\
+         sqlformat: error: argument -l/--language: invalid choice: 'PYTHON' \
+         (choose from 'python', 'php')\n"
+    );
+}
