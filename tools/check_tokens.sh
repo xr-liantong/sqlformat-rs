@@ -10,6 +10,11 @@ export PATH="$HOME/.cargo/bin:$PATH"
 
 [ $# -gt 0 ] || set -- fixtures/tokens.sql fixtures/kwcase.sql fixtures/corpus-20k.sql
 
+if [ ! -x .venv/bin/python ]; then
+    echo "FAIL tokens: .venv/bin/python is missing; run tools/setup_venv.sh"
+    exit 2
+fi
+
 cargo build --release --bin txdump >/dev/null 2>&1
 
 failed=0

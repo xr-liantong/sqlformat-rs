@@ -35,8 +35,15 @@ run "fmt"      cargo fmt --check
 run "clippy"   cargo clippy --release --all-targets -- -D warnings
 run "test"     cargo test --release
 run "parity"   tools/parity.sh
-run "keywords" .venv/bin/python tools/check_keywords.py
-run "tokens"   tools/check_tokens.sh
+# The two Python cross-checks need sqlparse. A missing dependency is a
+# failure, not a skip: a gate that cannot run must not look green.
+if .venv/bin/python -c 'import sqlparse' >/dev/null 2>&1; then
+    run "keywords" .venv/bin/python tools/check_keywords.py
+    run "tokens"   tools/check_tokens.sh
+else
+    echo "FAIL python-deps -- .venv/bin/python cannot import sqlparse; run tools/setup_venv.sh"
+    fail=$((fail + 1))
+fi
 
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp" tools/parity-dropped.bash tools/parity-tampered.sh' EXIT
