@@ -52,13 +52,11 @@ Formatting Options:
 ";
 
 /// Flags upstream has but this port does not implement yet.
-const UNSUPPORTED: [&str; 9] = [
+const UNSUPPORTED: [&str; 7] = [
     "-a",
     "--reindent_aligned",
     "-l",
     "--language",
-    "--indent_after_first",
-    "--indent_columns",
     "--right_margin",
     "--truncate_strings",
     "--truncate_char",
@@ -111,7 +109,9 @@ fn case_value(label: &str, value: &str) -> Result<String, u8> {
 
 /// Long options in argparse definition order. `ambiguous option: --i could
 /// match ...` lists the candidates in this order, so this is a list, not a set.
-const LONGS: [&str; 18] = [
+// A slice, not an array: the count used to be written down twice and a
+// dropped or added option broke the build instead of the option table.
+const LONGS: &[&str] = &[
     "--help",
     "--outfile",
     "--in-place",
@@ -133,7 +133,7 @@ const LONGS: [&str; 18] = [
 ];
 
 /// Long options that consume the next token, or an `=value` suffix.
-const TAKES_VALUE: [&str; 8] = [
+const TAKES_VALUE: &[&str] = &[
     "--outfile",
     "--keywords",
     "--identifiers",
@@ -271,6 +271,13 @@ fn run() -> Result<(), u8> {
             "--in-place" => in_place = true,
             "--strip-comments" => options.strip_comments = true,
             "-s" | "--use_space_around_operators" => options.space_around_operators = true,
+            "--indent_after_first" => options.indent_after_first = true,
+            // `validate_options`: indent_columns enforces reindent, and reindent
+            // enforces strip_whitespace.
+            "--indent_columns" => {
+                options.indent_columns = true;
+                options.reindent = true;
+            }
             _ if UNSUPPORTED.contains(&arg.as_str()) => {
                 return Err(usage_error(&format!(
                     "option {arg} is not implemented by this port"
