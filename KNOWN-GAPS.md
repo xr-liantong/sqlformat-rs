@@ -97,4 +97,4 @@ failures copy CPython's `str(OSError)`: `[Errno 2] No such file or directory:
 
 `.github/workflows/` is intentionally absent: the account token used to push
 lacks the `workflow` scope, so GitHub rejects any commit that adds a workflow
-file. The gates in the README are run manually (and by `tools/parity.sh`).
+file. There is no CI: the gates are run by hand on the build box and re-verified from a clean clone (`git clone` -> `cargo build --release` -> `tools/gates.sh`) before a release.
