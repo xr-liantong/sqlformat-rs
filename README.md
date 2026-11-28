@@ -5,9 +5,16 @@ A Rust port of the `sqlformat` CLI from [sqlparse](https://github.com/andialbrec
 3 MB / 20,000-statement file and 2.5x lower peak RSS than CPython.
 
 ```
+tools/dev-gate.sh                       # the whole gate, one command (fmt, clippy,
+                                        # tests, byte parity, reverse tests)
 cargo build --release
 target/release/sqlformat-rs -r schema.sql
 ```
+
+`tools/dev-gate.sh` bootstraps the Python cross-checks (`tools/setup_venv.sh`)
+and then runs `tools/gates.sh`. The gate itself installs nothing: on a tree
+without `.venv` it fails with that command in the message, so a green gate is
+always a verdict about the code (issue #10).
 
 ## Scope (v0.2)
 
