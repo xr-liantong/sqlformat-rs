@@ -20,7 +20,7 @@ fail=0
 
 # The number of cases this script must execute. Issue #10: commenting a case
 # out used to leave the gate green, so the total is checked at the end too.
-EXPECTED_CASES=31
+EXPECTED_CASES=34
 
 # Cross-check the hard-coded total against the case table itself.  Both ways:
 # a case commented out leaves the table shorter than EXPECTED_CASES, and a
@@ -111,6 +111,11 @@ check indent-width-4 golden-iw4.sql --indent_width 4
 check_in strip-comments golden-strip.sql fixtures/comments.sql --strip-comments
 check_in strip-comments-reindent golden-strip-r.sql fixtures/comments.sql --strip-comments -r
 check_in strip-comments-keeps-hint golden-strip-hint.sql fixtures/hint.sql --strip-comments -r
+# Issue #8: the removed comment has to be opaque to grouping, or the list wraps
+# where upstream keeps it on one line, and `--indent_width` changes nothing.
+check_in strip-comments-reindent-list golden-strip-list-r.sql fixtures/strip-list.sql --strip-comments -r
+check_in strip-comments-reindent-list-width golden-strip-list-r.sql fixtures/strip-list.sql --strip-comments -r --indent_width 2
+check_in strip-comments-reindent-line golden-strip-list-r.sql fixtures/strip-line.sql --strip-comments -r
 
 # --encoding: the fixture is latin-1 on disk, the golden is what upstream writes
 # to stdout (always the process encoding, not --encoding).

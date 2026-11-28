@@ -202,7 +202,9 @@ fn strip_comments(tokens: Vec<Token>) -> Vec<Token> {
             };
             if keep_placeholder {
                 out.push(Token {
-                    ttype: Tk::Whitespace,
+                    // Not `Whitespace` yet: grouping must still see the comment
+                    // that was here (`CommentPlaceholder`).
+                    ttype: Tk::CommentPlaceholder,
                     value: comment_placeholder(&text),
                 });
             }
@@ -332,6 +334,18 @@ fn emit(
         || options.strip_comments;
     if grouped {
         group::group(&mut tree)?;
+    }
+    if options.strip_comments {
+        // `StripCommentsFilter` runs on the *grouped* tree upstream, so the
+        // replacement happens here too: grouping has already decided the shape
+        // of every list, and only now does the placeholder become whitespace
+        // (issue #8: `--strip-comments -r` used to re-wrap lines upstream keeps).
+        let placeholders: Vec<crate::tree::Id> = (0..tree.nodes.len())
+            .filter(|id| tree.nodes[*id].ttype == Some(Tk::CommentPlaceholder))
+            .collect();
+        for id in placeholders {
+            tree.set_ttype(id, Tk::Whitespace);
+        }
     }
     // `TokenList.__init__` snapshots its text (`super().__init__(None,
     // ''.join(...))`), and no later filter refreshes it, so `-l` prints the

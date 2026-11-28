@@ -42,6 +42,12 @@ pub enum Tk {
     Other,
     /// Marker: the match must be classified through the keyword table.
     KeywordLookup,
+    /// A removed comment: `StripCommentsFilter` leaves whitespace behind, but
+    /// the removal happens *after* grouping upstream, so before grouping this
+    /// token has to stay opaque like the comment it replaces -- otherwise
+    /// `a, /* c */ b` groups as an IdentifierList and the reindent filter
+    /// breaks the line that upstream keeps (`group::group` never sees it).
+    CommentPlaceholder,
 }
 
 impl Tk {
@@ -161,6 +167,7 @@ impl Tk {
             Tk::Wildcard => "Token.Wildcard",
             Tk::Error => "Token.Error",
             Tk::Other => "Token.Other",
+            Tk::CommentPlaceholder => "Token.Text.Whitespace",
             Tk::KeywordLookup => "PROCESS_AS_KEYWORD",
         }
     }
